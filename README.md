@@ -17,7 +17,7 @@ name: Sécurité
 on: [push, pull_request]
 jobs:
   security:
-    uses: parime/glpi-plugin-security/.github/workflows/plugin-security.yml@v1
+    uses: parime/glpi-plugin-security/.github/workflows/plugin-security.yml@v1.0.1
     with:
       plugin-key: monplugin   # nom du dossier dans plugins/ (plugin_version_monplugin)
       # Facultatif : jeu de données créé avant la désinstallation, pour que le contrôle des
@@ -73,7 +73,9 @@ Pour Semgrep, `// nosemgrep: <id de la règle>` sur la ligne, avec un commentair
 1. Ajouter la règle ou le contrôle, son cas dans `semgrep/glpi-plugin-security.php` (`ruleid:` /
    `ok:`) ou le défaut dans `tests/fixtures/secbad` (et sa correction dans `secgood`).
 2. L'auto-test doit passer.
-3. Déplacer l'étiquette `v1` (ou en créer une nouvelle si le changement doit être adopté dépôt par
-   dépôt) : tous les plugins l'appliquent à leur prochaine exécution.
+3. Publier une nouvelle étiquette `vX.Y.Z` (jamais déplacer une étiquette publiée), avec
+   `default: vX.Y.Z` pour `security-ref` dans `plugin-security.yml`.
+4. Dans chaque plugin, une PR passe `@vX.Y.Z` dans `.github/workflows/security.yml` : une règle
+   plus stricte arrive avec ses corrections, jamais en cassant la CI sans prévenir.
 
 Lancement local : `bash checks/start-glpi.sh`, puis `bash checks/check-plugin.sh <dossier> <clé>`.

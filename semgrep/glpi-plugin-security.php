@@ -37,6 +37,10 @@ function install($DB, string $query): void
     $DB->doQuery($query) or die($DB->error());
     // ok: glpi-or-die
     $DB->doQuery($query);
+    // ok: glpi-or-die
+    // Plus de « or die($DB->error()) » : doQuery() lève une exception.
+    // ruleid: glpi-or-die
+    $DB->doQuery($query) || die('Erreur');
 }
 
 function messages(array $input): void

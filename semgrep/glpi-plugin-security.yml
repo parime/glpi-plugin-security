@@ -125,8 +125,9 @@ rules:
     message: >-
       « or die() » coupe l'installation au milieu (tables partielles) et affiche l'erreur SQL brute
       à l'administrateur. En GLPI 11, $DB->doQuery() lève déjà une exception : l'appeler seul.
-    # Motif textuel : Semgrep n'analyse pas die(...) comme une expression dans un motif PHP.
-    pattern-regex: '(?i)(\bor\b|\|\|)\s*(die|exit)\s*\('
+    # Motif textuel : Semgrep n'analyse pas die(...) comme une expression dans un motif PHP. Un appel
+    # doit précéder (« ...) or die(») : un commentaire qui cite la tournure ne compte pas.
+    pattern-regex: '(?i)\)\s*(\bor\b|\|\|)\s*(die|exit)\s*\('
 
   - id: glpi-session-message-unescaped-input
     languages: [php]
