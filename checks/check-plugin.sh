@@ -14,7 +14,7 @@ C=${GLPI_CONTAINER:-glpisec}
 HERE=$(cd "$(dirname "$0")" && pwd)
 P=/var/www/glpi/plugins/$KEY
 
-docker exec "$C" rm -rf "$P"
+docker exec -u root "$C" rm -rf "$P"
 docker cp "$DIR/." "$C:$P"
 docker cp "$HERE/glpi-runtime-checks.php" "$C":/tmp/glpi-runtime-checks.php
 EXC_ARG=()
@@ -22,11 +22,12 @@ if [ -n "$EXCEPTIONS" ] && [ -f "$DIR/$EXCEPTIONS" ]; then
   docker cp "$DIR/$EXCEPTIONS" "$C":/tmp/glpi-security-exceptions
   EXC_ARG=(/tmp/glpi-security-exceptions)
 fi
+# docker cp crée les fichiers au nom de root : les rendre à www-data avant composer et GLPI.
+docker exec -u root "$C" chown -R www-data:www-data "$P" /var/glpi/files
 if [ -f "$DIR/composer.json" ]; then
-  docker exec "$C" sh -c "cd $P && COMPOSER_HOME=/tmp/composer-home php /tmp/composer.phar install --no-dev --no-interaction --quiet" \
+  docker exec -u www-data "$C" sh -c "cd $P && COMPOSER_HOME=/tmp/composer-home php /tmp/composer.phar install --no-dev --no-interaction --quiet" \
     || { echo "::error::composer install a échoué"; exit 1; }
 fi
-docker exec -u root "$C" chown -R www-data:www-data "$P" /var/glpi/files
 docker exec -u www-data "$C" sh -c "cd /var/www/glpi && php bin/console plugin:install $KEY --force -n && php bin/console plugin:activate $KEY -n" \
   || { echo "::error::installation ou activation du plugin impossible"; exit 1; }
 
