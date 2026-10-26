@@ -1,0 +1,43 @@
+# Auto-test du dépôt : chaque règle et chaque contrôle doit détecter son défaut (plugin de test
+# secbad, défauts volontaires) et ne rien signaler sur la version correcte (secgood).
+name: Auto-test
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  semgrep-rules:
+    name: Règles Semgrep (cas de test)
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+      - run: semgrep --validate --config semgrep/ --metrics=off
+      - run: semgrep --test semgrep/ --metrics=off
+
+  runtime-checks:
+    name: Contrôles d'exécution (secbad échoue, secgood passe)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+      - run: bash checks/start-glpi.sh
+      - name: secbad doit échouer aux trois contrôles
+        run: |
+          out=$(bash checks/check-plugin.sh tests/fixtures/secbad secbad || true)
+          echo "$out"
+          grep -q "RESULT tabs=1 notifications=1 leftovers=1" <<< "$out" \
+            || { echo "::error::un contrôle ne détecte plus le défaut volontaire de secbad"; exit 1; }
+      - name: secgood doit passer
+        run: bash checks/check-plugin.sh tests/fixtures/secgood secgood
+
+  shell:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+      - run: shellcheck checks/*.sh

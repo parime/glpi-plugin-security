@@ -1,0 +1,25 @@
+# Audit hebdomadaire : chaque dépôt de plugin GLPI du compte (dépôt non archivé dont setup.php
+# déclare plugin_version_<clé>) doit appeler le workflow commun plugin-security.yml. Sinon, une
+# issue de ce dépôt les liste ; elle se ferme d'elle-même quand tous sont couverts. Couvre aussi
+# les dépôts créés sans le modèle parime/glpi-plugin-template.
+name: Audit des dépôts de plugins
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+      - name: Dépôts de plugins sans le contrôle commun
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OWNER: ${{ github.repository_owner }}
+        run: bash checks/audit-repositories.sh "$OWNER" "$GITHUB_REPOSITORY"

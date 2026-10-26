@@ -1,0 +1,155 @@
+# Regles Semgrep propres aux plugins GLPI, en complement de `semgrep ci --config auto` (qui ne
+# connait pas la semantique des droits GLPI). Chaque regle encode une classe de defaut deja
+# relevee par la revue de securite de la marketplace GLPI : un droit global (Session::haveRight)
+# ne dit rien de l'entite d'un enregistrement, et une entite lue dans la requete doit toujours
+# etre confrontee a la session.
+#
+# Lancement local : docker run --rm -v "$PWD:/src" semgrep/semgrep semgrep scan --config .semgrep/ --error
+# Faux positif averé : `// nosemgrep: <id>` sur la ligne, avec un commentaire qui justifie.
+
+rules:
+  - id: glpi-access-decision-from-global-right
+    languages: [php]
+    severity: ERROR
+    message: >-
+      Decision d'acces prise sur le seul droit global ($V = Session::haveRight(...)) : ce droit ne
+      verifie pas l'entite de l'enregistrement charge. Utiliser $item->can($id, READ|UPDATE), qui
+      controle droit ET entite (CommonDBTM::canViewItem/canUpdateItem).
+    paths:
+      include: ["/front/*.php", "/ajax/*.php"]
+    patterns:
+      - pattern-inside: |
+          $V = Session::haveRight(...);
+          ...
+      - pattern-either:
+          - pattern: |
+              if (<... !$V ...>) { ... throw new $E(...); }
+          - pattern: |
+              if (<... !$V ...>) { ... Html::displayRightError(...); }
+
+  - id: glpi-request-entity-without-access-check
+    languages: [php]
+    severity: ERROR
+    message: >-
+      entities_id lu dans la requete sans Session::haveAccessToEntity() : n'importe quelle entite
+      de l'instance peut etre visee en changeant la valeur envoyee.
+    paths:
+      include: ["/front/*.php", "/ajax/*.php"]
+    patterns:
+      - pattern-either:
+          - pattern: $X = (int) ($_POST['entities_id'] ?? $D);
+          - pattern: $X = (int) ($_GET['entities_id'] ?? $D);
+          - pattern: $X = (int) ($_REQUEST['entities_id'] ?? $D);
+          - pattern: $X = (int) $_POST['entities_id'];
+          - pattern: $X = (int) $_GET['entities_id'];
+      - pattern-not-inside: |
+          $X = $Y;
+          ...
+          if (<... Session::haveAccessToEntity($X) ...>) { ... }
+
+  - id: glpi-request-entity-in-array
+    languages: [php]
+    severity: ERROR
+    message: >-
+      entities_id passe directement depuis la requete : le valider d'abord avec
+      Session::haveAccessToEntity() dans une variable.
+    paths:
+      include: ["/front/*.php", "/ajax/*.php"]
+    pattern-either:
+      - pattern: "[..., 'entities_id' => <... $_POST['entities_id'] ...>, ...]"
+      - pattern: "[..., 'entities_id' => <... $_GET['entities_id'] ...>, ...]"
+      - pattern: "[..., 'entities_id' => <... $_REQUEST['entities_id'] ...>, ...]"
+
+  - id: glpi-twig-raw-output
+    languages: [generic]
+    severity: ERROR
+    message: >-
+      `|raw` desactive l'echappement Twig. Autorise seulement apres json_encode (dans un <script>),
+      e('js'), ou sur une variable *_html / *_dropdown produite par le coeur GLPI. Tout autre
+      contenu doit etre purifie en PHP (RichText::getSafeHtml) et la variable nommee *_safe_html.
+    paths:
+      include: ["/templates/**/*.twig"]
+    patterns:
+      - pattern-regex: '\{\{[^}]*\|\s*raw[^}]*\}\}'
+      - pattern-not-regex: '\{\{[^}]*\|\s*json_encode\s*\|\s*raw[^}]*\}\}'
+      - pattern-not-regex: '\{\{\s*\w+_(html|dropdown)\s*\|\s*raw\s*\}\}'
+
+  - id: glpi-csv-cell-from-user-input
+    languages: [php]
+    severity: WARNING
+    message: >-
+      Cellule CSV ecrite telle quelle : un texte saisi par un utilisateur commencant par = + - @
+      est execute comme formule par le tableur. Prefixer d'une apostrophe ces valeurs.
+    patterns:
+      - pattern: fputcsv($F, [..., $L[$K], ...], ...)
+      - metavariable-regex:
+          metavariable: $K
+          regex: (comment|description|name|content|reason|title)
+
+  # --- Revue de sécurité de la marketplace, grcmanager 2.11.0 (parime/glpi-iso27001-management#280) ---
+
+  - id: glpi-generated-document-recursive
+    languages: [php]
+    severity: ERROR
+    message: >-
+      Document généré créé récursif : il devient lisible par tout détenteur du droit Documents des
+      sous-entités, sans aucun droit sur l'objet dont il provient. Le créer non récursif, dans
+      l'entité de son objet source, et ne le lier qu'à cet objet (jamais à un objet global, sans
+      entité : Document::canViewFileFromItem() ignore l'entité du document).
+    pattern-either:
+      - pattern: "[..., 'is_recursive' => 1, ..., '_filename' => $F, ...]"
+      - pattern: "[..., '_filename' => $F, ..., 'is_recursive' => 1, ...]"
+
+  - id: glpi-notification-target-core-id
+    languages: [php]
+    severity: ERROR
+    message: >-
+      Cible de notification du plugin dans la plage des identifiants du cœur (1 =
+      administrateur global, 2 = technicien attribué, 6 = utilisateur de l'élément…) : GLPI la
+      traite comme la cible du cœur et n'appelle jamais addSpecificTargets(). Utiliser un
+      identifiant ≥ 1000.
+    patterns:
+      - pattern-inside: |
+          class $C extends NotificationTarget { ... }
+      - pattern: const $NAME = $N;
+      - metavariable-regex:
+          metavariable: $NAME
+          regex: (?i).*TARGET.*
+      - metavariable-comparison:
+          metavariable: $N
+          comparison: $N < 1000
+
+  - id: glpi-or-die
+    languages: [php]
+    severity: ERROR
+    message: >-
+      « or die() » coupe l'installation au milieu (tables partielles) et affiche l'erreur SQL brute
+      à l'administrateur. En GLPI 11, $DB->doQuery() lève déjà une exception : l'appeler seul.
+    # Motif textuel : Semgrep n'analyse pas die(...) comme une expression dans un motif PHP.
+    pattern-regex: '(?i)(\bor\b|\|\|)\s*(die|exit)\s*\('
+
+  - id: glpi-session-message-unescaped-input
+    languages: [php]
+    severity: ERROR
+    message: >-
+      Saisie de l'utilisateur insérée sans échappement dans un message de session : GLPI 11 affiche
+      ces messages avec |raw. Entourer la valeur de htmlescape().
+    patterns:
+      - pattern-either:
+          - pattern: Session::addMessageAfterRedirect(sprintf($FMT, ..., $IN[$K], ...), ...)
+          - pattern: Session::addMessageAfterRedirect($S . $IN[$K] . $T, ...)
+          - pattern: Session::addMessageAfterRedirect($S . $IN[$K], ...)
+      - metavariable-regex:
+          metavariable: $IN
+          regex: ^\$(input|_POST|_GET|_REQUEST)$
+
+  - id: glpi-visibility-from-canviewitem-only
+    languages: [php]
+    severity: WARNING
+    message: >-
+      canViewItem() seul ne contrôle que l'entité : pour un objet sans entité (registre du plugin)
+      il vaut toujours vrai, et il ne vérifie pas le droit de lecture du type. Pour décider de
+      nommer ou d'afficher un élément, utiliser $item->can($id, READ) (droit du type ET élément).
+    pattern-either:
+      - pattern: $I->getFromDB($ID) && $I->canViewItem()
+      - pattern: "!$I->getFromDB($ID) || !$I->canViewItem()"

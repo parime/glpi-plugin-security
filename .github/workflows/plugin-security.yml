@@ -1,0 +1,94 @@
+# Contrôles de sécurité communs à tous les plugins GLPI de parime : workflow réutilisable.
+#
+# Dans le dépôt d'un plugin (.github/workflows/security.yml) :
+#
+#   name: Sécurité
+#   on: [push, pull_request]
+#   jobs:
+#     security:
+#       uses: parime/glpi-plugin-security/.github/workflows/plugin-security.yml@v1
+#       with:
+#         plugin-key: monplugin            # nom du dossier du plugin dans plugins/
+#         # seed-command: php plugins/monplugin/tests/security/setup.php   (facultatif)
+#
+# Voir README.md : ce que chaque contrôle vérifie, et le fichier d'exceptions justifiées.
+name: Contrôles de sécurité des plugins GLPI
+
+on:
+  workflow_call:
+    inputs:
+      plugin-key:
+        description: Clé du plugin (nom de son dossier dans plugins/ et suffixe de plugin_version_<clé>)
+        required: true
+        type: string
+      glpi-image:
+        description: Image GLPI des contrôles d'exécution
+        required: false
+        type: string
+        default: glpi/glpi:11.0.11
+      seed-command:
+        description: Commande lancée dans le conteneur GLPI (dossier de GLPI, www-data) avant la désinstallation
+        required: false
+        type: string
+        default: ''
+      exceptions-file:
+        description: Fichier d'exceptions justifiées, à la racine du dépôt du plugin
+        required: false
+        type: string
+        default: .glpi-security-exceptions
+      security-ref:
+        description: Version des règles et contrôles communs (étiquette de parime/glpi-plugin-security)
+        required: false
+        type: string
+        default: v1
+
+permissions:
+  contents: read
+
+jobs:
+  semgrep:
+    name: Règles Semgrep communes (GLPI)
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+        with:
+          repository: parime/glpi-plugin-security
+          ref: ${{ inputs.security-ref }}
+          path: .glpi-plugin-security
+      - name: Règles bloquantes (ERROR)
+        run: >-
+          semgrep scan --config .glpi-plugin-security/semgrep/glpi-plugin-security.yml
+          --severity ERROR --error --metrics=off
+          --exclude .glpi-plugin-security --exclude vendor --exclude node_modules
+      - name: Avertissements (non bloquants)
+        run: >-
+          semgrep scan --config .glpi-plugin-security/semgrep/glpi-plugin-security.yml
+          --severity WARNING --metrics=off
+          --exclude .glpi-plugin-security --exclude vendor --exclude node_modules || true
+
+  runtime:
+    name: Contrôles dans un vrai GLPI (onglets, notifications, désinstallation)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+        with:
+          path: plugin
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+        with:
+          repository: parime/glpi-plugin-security
+          ref: ${{ inputs.security-ref }}
+          path: security
+      - name: Démarre GLPI
+        run: bash security/checks/start-glpi.sh "${{ inputs.glpi-image }}"
+      - name: Contrôle le plugin
+        env:
+          PLUGIN_KEY: ${{ inputs.plugin-key }}
+          EXCEPTIONS: ${{ inputs.exceptions-file }}
+          SEED: ${{ inputs.seed-command }}
+        run: bash security/checks/check-plugin.sh plugin "$PLUGIN_KEY" "$EXCEPTIONS" "$SEED"
+      - name: Journal GLPI (en cas d'échec)
+        if: failure()
+        run: docker logs glpisec --tail 200
