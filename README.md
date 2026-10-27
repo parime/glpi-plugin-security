@@ -27,7 +27,8 @@ jobs:
 
 Puis rendre le job « security » obligatoire dans la protection de la branche principale. Un nouveau
 plugin créé depuis [glpi-plugin-template](https://github.com/parime/glpi-plugin-template) l'a déjà.
-L'**audit hebdomadaire** de ce dépôt ouvre une issue pour tout dépôt de plugin qui ne l'appelle pas.
+L'**audit hebdomadaire** de ce dépôt ouvre une issue pour tout dépôt de plugin qui ne l'appelle pas,
+ou qui l'appelle dans une version antérieure à la dernière étiquette (branche par défaut).
 
 ## Ce qui est vérifié
 
