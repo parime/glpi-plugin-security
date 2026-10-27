@@ -154,3 +154,19 @@ rules:
     pattern-either:
       - pattern: $I->getFromDB($ID) && $I->canViewItem()
       - pattern: "!$I->getFromDB($ID) || !$I->canViewItem()"
+
+  - id: glpi-unconditional-vendor-autoload
+    languages: [php]
+    severity: ERROR
+    message: >-
+      vendor/autoload.php chargé sans condition : une archive ou un clone sans vendor/ provoque une
+      erreur fatale sur chaque page de GLPI. Le charger seulement s'il est lisible
+      (is_readable()) et refuser l'installation dans check_prerequisites() avec un message
+      (« composer install --no-dev »).
+    patterns:
+      - pattern-either:
+          - pattern: require_once __DIR__ . '/vendor/autoload.php';
+          - pattern: require __DIR__ . '/vendor/autoload.php';
+          - pattern: include_once __DIR__ . '/vendor/autoload.php';
+      - pattern-not-inside: |
+          if (...) { ... }

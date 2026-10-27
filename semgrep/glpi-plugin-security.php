@@ -62,3 +62,13 @@ function visibility(CommonDBTM $item, int $id): bool
     // ok: glpi-visibility-from-canviewitem-only
     return $item->can($id, READ);
 }
+
+function vendorAutoload(): void
+{
+    // ruleid: glpi-unconditional-vendor-autoload
+    require_once __DIR__ . '/vendor/autoload.php';
+    if (is_readable(__DIR__ . '/vendor/autoload.php')) {
+        // ok: glpi-unconditional-vendor-autoload
+        require_once __DIR__ . '/vendor/autoload.php';
+    }
+}

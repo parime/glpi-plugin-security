@@ -17,7 +17,7 @@ name: Sécurité
 on: [push, pull_request]
 jobs:
   security:
-    uses: parime/glpi-plugin-security/.github/workflows/plugin-security.yml@v1.1.0
+    uses: parime/glpi-plugin-security/.github/workflows/plugin-security.yml@v1.2.0
     with:
       plugin-key: monplugin   # nom du dossier dans plugins/ (plugin_version_monplugin)
       # Facultatif : jeu de données créé avant la désinstallation, pour que le contrôle des
@@ -43,6 +43,7 @@ L'**audit hebdomadaire** de ce dépôt ouvre une issue pour tout dépôt de plug
 | `glpi-notification-target-core-id` | Cible de notification du plugin < 1000 : confondue avec une cible du cœur |
 | `glpi-or-die` | `or die()` à l'installation |
 | `glpi-session-message-unescaped-input` | Saisie non échappée dans un message de session (affiché avec `\|raw`) |
+| `glpi-unconditional-vendor-autoload` | `vendor/autoload.php` chargé sans condition : erreur fatale sur chaque page sans `vendor/` |
 | `glpi-visibility-from-canviewitem-only` (avertissement) | `canViewItem()` seul pour décider d'afficher un élément |
 
 ### Contrôles dans un vrai GLPI (`checks/`)
