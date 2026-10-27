@@ -6,7 +6,7 @@
 #   on: [push, pull_request]
 #   jobs:
 #     security:
-#       uses: parime/glpi-plugin-security/.github/workflows/plugin-security.yml@v1.0.1
+#       uses: parime/glpi-plugin-security/.github/workflows/plugin-security.yml@v1.1.0
 #       with:
 #         plugin-key: monplugin            # nom du dossier du plugin dans plugins/
 #         # seed-command: php plugins/monplugin/tests/security/setup.php   (facultatif)
@@ -40,7 +40,7 @@ on:
         description: Version des règles et contrôles communs (étiquette de parime/glpi-plugin-security)
         required: false
         type: string
-        default: v1.0.1
+        default: v1.1.0
 
 permissions:
   contents: read

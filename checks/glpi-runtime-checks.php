@@ -5,11 +5,13 @@
  *
  * Usage (dans le conteneur GLPI, utilisateur www-data, plugin installé et activé sauf pour
  * « leftovers ») :
- *   php glpi-runtime-checks.php <clé du plugin> <tabs|notifications|leftovers> [fichier d'exceptions]
+ *   php glpi-runtime-checks.php <clé du plugin> <tabs|rights|notifications|leftovers> [fichier d'exceptions]
  *
  * - tabs : chaque onglet que le plugin ajoute à un objet du cœur est demandé comme le fait
  *   ajax/common.tabs.php (qui ne consulte jamais getTabNameForItem()), par un profil qui a tous les
  *   droits du cœur mais aucun droit du plugin. Le contenu doit être refusé.
+ * - rights : chaque droit du plugin (plugin_<clé>…, rule_<clé>…) peut être donné à un profil
+ *   depuis un onglet du plugin sur les profils (matrice Profile::displayRightsChoiceMatrix()).
  * - notifications : aucune cible de notification du plugin n'utilise un identifiant de cible du
  *   cœur (1 = administrateur global…), et chaque cible déclarée est une constante du cœur ou de
  *   la classe (jamais un identifiant calculé, comme un id d'utilisateur).
@@ -26,8 +28,8 @@
 declare(strict_types=1);
 
 [$script, $key, $mode, $exceptionsFile] = $argv + [null, '', '', ''];
-if ($key === '' || !in_array($mode, ['tabs', 'notifications', 'leftovers'], true)) {
-    fwrite(STDERR, "Usage : php {$script} <clé du plugin> <tabs|notifications|leftovers> [exceptions]\n");
+if ($key === '' || !in_array($mode, ['tabs', 'rights', 'notifications', 'leftovers'], true)) {
+    fwrite(STDERR, "Usage : php {$script} <clé du plugin> <tabs|rights|notifications|leftovers> [exceptions]\n");
     exit(2);
 }
 
@@ -186,6 +188,63 @@ if ($mode === 'tabs') {
         }
     }
     echo "{$checked} onglet(s) du plugin contrôlé(s) sur des objets du cœur.\n";
+}
+
+if ($mode === 'rights') {
+    global $DB;
+    // Droits du plugin déclarés dans le cœur : plugin_<clé>… et rule_<clé>… (règles du plugin).
+    $rights = [];
+    foreach ($DB->request([
+        'SELECT'   => 'name',
+        'DISTINCT' => true,
+        'FROM'     => 'glpi_profilerights',
+        'WHERE'    => ['OR' => [['name' => ['LIKE', 'plugin\_' . $key . '%']], ['name' => ['LIKE', 'rule\_' . $key . '%']]]],
+    ]) as $row) {
+        $rights[] = (string) $row['name'];
+    }
+
+    // Onglets du plugin sur un profil en interface standard, rendus avec les droits du super-administrateur
+    // et tous ceux du plugin (un onglet peut exiger l'accès au plugin pour en déléguer les droits).
+    foreach ($rights as $right) {
+        $_SESSION['glpiactiveprofile'][$right] = 0x7FFFFFFF;
+    }
+    $profileId = (int) ($DB->request([
+        'SELECT' => 'id', 'FROM' => 'glpi_profiles', 'WHERE' => ['interface' => 'central'], 'ORDER' => 'id', 'LIMIT' => 1,
+    ])->current()['id'] ?? 0);
+    $profile = new Profile();
+    $html = '';
+    if ($profileId > 0 && $profile->getFromDB($profileId)) {
+        $registered = (array) (new ReflectionProperty(CommonGLPI::class, 'othertabs'))->getValue();
+        foreach (array_keys((array) ($registered[Profile::class] ?? [])) as $tab) {
+            if (!is_string($tab) || !$isPluginClass($tab) || !method_exists($tab, 'displayTabContentForItem')) {
+                continue;
+            }
+            $names = (new $tab())->getTabNameForItem($profile, 0);
+            foreach (is_array($names) && $names !== [] ? array_keys($names) : [1] as $num) {
+                ob_start();
+                try {
+                    $tab::displayTabContentForItem($profile, $num, 0);
+                } catch (Throwable $e) {
+                    echo "WARN  profile-right {$tab}\${$num} : {$e->getMessage()}\n";
+                }
+                $html .= (string) ob_get_clean();
+            }
+        }
+    }
+    foreach ($rights as $right) {
+        // Nom des cases de Profile::displayRightsChoiceMatrix(), enregistrées par front/profile.form.php.
+        if (str_contains($html, 'name="_' . $right . '[') || str_contains($html, "name='_" . $right . '[')) {
+            echo "OK  profile-right {$right}\n";
+            continue;
+        }
+        $report(
+            'profile-right',
+            $right,
+            'droit du plugin absent des onglets des profils : un administrateur ne peut le donner qu\'en écrivant '
+                . 'en base. Ajouter un onglet sur Profile (addtabon) affichant Profile::displayRightsChoiceMatrix()'
+        );
+    }
+    echo count($rights) . " droit(s) du plugin contrôlé(s) dans les onglets des profils.\n";
 }
 
 if ($mode === 'notifications') {

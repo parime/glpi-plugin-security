@@ -17,7 +17,7 @@ name: Sécurité
 on: [push, pull_request]
 jobs:
   security:
-    uses: parime/glpi-plugin-security/.github/workflows/plugin-security.yml@v1.0.1
+    uses: parime/glpi-plugin-security/.github/workflows/plugin-security.yml@v1.1.0
     with:
       plugin-key: monplugin   # nom du dossier dans plugins/ (plugin_version_monplugin)
       # Facultatif : jeu de données créé avant la désinstallation, pour que le contrôle des
@@ -52,6 +52,9 @@ Le plugin est installé dans le GLPI officiel (11.0.11 par défaut), puis :
 - **Onglets** : chaque onglet que le plugin ajoute à un objet du cœur est demandé comme le fait
   `ajax/common.tabs.php` (qui ne consulte jamais `getTabNameForItem()`), par un profil qui a tous les
   droits du cœur mais aucun droit du plugin. Le contenu doit être refusé.
+- **Droits attribuables** : chaque droit du plugin (`plugin_<clé>…`, `rule_<clé>…`) figure dans la
+  matrice d'un onglet du plugin sur les profils (`Profile::displayRightsChoiceMatrix()`). Sinon seul
+  le profil servi à l'installation l'a, et un administrateur ne peut le donner qu'en écrivant en base.
 - **Notifications** : aucune constante de cible du plugin sous 1000, et chaque cible déclarée est une
   constante du cœur ou de la classe (jamais un identifiant calculé).
 - **Désinstallation** : après le jeu de données facultatif puis la désinstallation, plus aucune ligne

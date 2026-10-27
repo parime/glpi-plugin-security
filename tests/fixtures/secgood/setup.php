@@ -30,4 +30,5 @@ function plugin_init_secgood(): void
 
     $PLUGIN_HOOKS['csrf_compliant']['secgood'] = true;
     Plugin::registerClass(PluginSecgoodThing::class, ['addtabon' => ['Computer']]);
+    Plugin::registerClass(PluginSecgoodProfile::class, ['addtabon' => ['Profile']]);
 }
