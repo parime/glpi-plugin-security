@@ -1,0 +1,19 @@
+msgid ""
+msgstr ""
+"Language: fr_FR\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "Save"
+msgstr "Enregistrer<img src=x onerror=alert(1)>"
+
+msgid "Open the form"
+msgstr "Ouvrir le <a href=\"javascript:alert(1)\">formulaire</a>"
+
+msgid "Contact support"
+msgstr "Contacter le support sur https://evil.example"
+
+msgid "Item"
+msgstr "Élément ##user.password##"
+
+msgid "Done"
+msgstr "Fait&#60;script&#62;"

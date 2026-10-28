@@ -1,0 +1,13 @@
+msgid ""
+msgstr ""
+"Language: fr_FR\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "Save"
+msgstr "Enregistrer"
+
+msgid "<strong>##item.name##</strong> is due on %s"
+msgstr "<strong>##item.name##</strong> arrive à échéance le %s"
+
+msgid "See https://glpi-project.org"
+msgstr "Voir https://glpi-project.org"

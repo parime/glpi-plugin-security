@@ -35,6 +35,20 @@ jobs:
       - name: secgood doit passer
         run: bash checks/check-plugin.sh tests/fixtures/secgood secgood
 
+  translations:
+    name: Contrôle des traductions (secbad échoue, secgood passe)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+      - name: secbad doit échouer
+        run: |
+          if php checks/check-translations.php tests/fixtures/secbad/locales; then
+            echo "::error::le contrôle des traductions ne détecte plus les injections de secbad"
+            exit 1
+          fi
+      - name: secgood doit passer
+        run: php checks/check-translations.php tests/fixtures/secgood/locales
+
   shell:
     name: ShellCheck
     runs-on: ubuntu-latest

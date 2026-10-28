@@ -17,7 +17,7 @@ name: Sécurité
 on: [push, pull_request]
 jobs:
   security:
-    uses: parime/glpi-plugin-security/.github/workflows/plugin-security.yml@v1.2.0
+    uses: parime/glpi-plugin-security/.github/workflows/plugin-security.yml@v1.3.0
     with:
       plugin-key: monplugin   # nom du dossier dans plugins/ (plugin_version_monplugin)
       # Facultatif : jeu de données créé avant la désinstallation, pour que le contrôle des
@@ -46,6 +46,14 @@ ou qui l'appelle dans une version antérieure à la dernière étiquette (branch
 | `glpi-session-message-unescaped-input` | Saisie non échappée dans un message de session (affiché avec `\|raw`) |
 | `glpi-unconditional-vendor-autoload` | `vendor/autoload.php` chargé sans condition : erreur fatale sur chaque page sans `vendor/` |
 | `glpi-visibility-from-canviewitem-only` (avertissement) | `canViewItem()` seul pour décider d'afficher un élément |
+
+### Traductions (`checks/check-translations.php`)
+
+Une traduction de `locales/*.po` ne doit rien ajouter d'actif à son texte source : ni balise HTML,
+ni URL, ni JavaScript (`javascript:`, `onerror=`…), ni entité HTML, ni balise de notification
+`##…##`. Les chaînes traduites sont souvent affichées sans échappement (messages de session, aides,
+notifications) : une traduction fournie par un contributeur, une plateforme ou un outil
+automatique ne peut ainsi pas injecter de contenu.
 
 ### Contrôles dans un vrai GLPI (`checks/`)
 
