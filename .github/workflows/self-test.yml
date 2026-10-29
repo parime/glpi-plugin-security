@@ -49,6 +49,28 @@ jobs:
       - name: secgood doit passer
         run: php checks/check-translations.php tests/fixtures/secgood/locales
 
+  archive:
+    name: Contrôle de l'archive (sans export-ignore échoue, avec passe)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+      # Le faux plugin devient un dépôt à part : git archive ne lit que ses fichiers commités.
+      - name: sans export-ignore, doit échouer
+        run: |
+          d=$(mktemp -d); cp -r tests/fixtures/archive/. "$d"; rm "$d/gitattributes-clean"
+          git -C "$d" init -q && git -C "$d" add -A
+          git -C "$d" -c user.name=ci -c user.email=ci@example.org commit -qm fixture
+          if bash checks/check-archive.sh "$d"; then
+            echo "::error::le contrôle de l'archive ne détecte plus tests/ et phpstan.neon"
+            exit 1
+          fi
+      - name: avec export-ignore, doit passer
+        run: |
+          d=$(mktemp -d); cp -r tests/fixtures/archive/. "$d"; mv "$d/gitattributes-clean" "$d/.gitattributes"
+          git -C "$d" init -q && git -C "$d" add -A
+          git -C "$d" -c user.name=ci -c user.email=ci@example.org commit -qm fixture
+          bash checks/check-archive.sh "$d"
+
   shell:
     name: ShellCheck
     runs-on: ubuntu-latest

@@ -17,7 +17,7 @@ name: Sécurité
 on: [push, pull_request]
 jobs:
   security:
-    uses: parime/glpi-plugin-security/.github/workflows/plugin-security.yml@v1.3.0
+    uses: parime/glpi-plugin-security/.github/workflows/plugin-security.yml@v1.4.0
     with:
       plugin-key: monplugin   # nom du dossier dans plugins/ (plugin_version_monplugin)
       # Facultatif : jeu de données créé avant la désinstallation, pour que le contrôle des
@@ -54,6 +54,15 @@ ni URL, ni JavaScript (`javascript:`, `onerror=`…), ni entité HTML, ni balise
 `##…##`. Les chaînes traduites sont souvent affichées sans échappement (messages de session, aides,
 notifications) : une traduction fournie par un contributeur, une plateforme ou un outil
 automatique ne peut ainsi pas injecter de contenu.
+
+### Archive publiée (`checks/check-archive.sh`)
+
+L'archive de release est construite avec `git archive` : elle ne doit contenir aucun fichier de
+développement. Le contrôle liste ce que `git archive HEAD` produit et échoue sur l'outillage de test,
+de CI ou d'analyse à la racine du dépôt : `tests/`, `.github/`, `.semgrep/`, `phpstan*`,
+`.phpstan-bootstrap.php`, `phpunit*`, `.php-cs-fixer*`, `phpcs.xml*`, `.editorconfig`,
+`.yamllint*`, `.gitignore`, `.gitattributes`, `.glpi-security-exceptions`, `docker-compose*`,
+`package.json`… Un fichier en trop s'exclut avec `export-ignore` dans `.gitattributes`.
 
 ### Contrôles dans un vrai GLPI (`checks/`)
 
