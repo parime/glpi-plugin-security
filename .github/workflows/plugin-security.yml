@@ -6,7 +6,7 @@
 #   on: [push, pull_request]
 #   jobs:
 #     security:
-#       uses: parime/glpi-plugin-security/.github/workflows/plugin-security.yml@v1.3.0
+#       uses: parime/glpi-plugin-security/.github/workflows/plugin-security.yml@v1.4.0
 #       with:
 #         plugin-key: monplugin            # nom du dossier du plugin dans plugins/
 #         # seed-command: php plugins/monplugin/tests/security/setup.php   (facultatif)
@@ -40,7 +40,7 @@ on:
         description: Version des règles et contrôles communs (étiquette de parime/glpi-plugin-security)
         required: false
         type: string
-        default: v1.3.0
+        default: v1.4.0
 
 permissions:
   contents: read
@@ -81,6 +81,21 @@ jobs:
           path: .glpi-plugin-security
       - name: Aucune balise, URL, JavaScript ou balise ##…## ajoutée par une traduction
         run: php .glpi-plugin-security/checks/check-translations.php locales
+
+  archive:
+    name: Archive de release sans fichier de développement
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+        with:
+          repository: parime/glpi-plugin-security
+          ref: ${{ inputs.security-ref }}
+          path: .glpi-plugin-security
+      # Ce que `git archive` produit, c'est-à-dire l'archive publiée : ni tests, ni CI, ni
+      # configuration d'analyse (export-ignore dans .gitattributes).
+      - name: Contenu de l'archive publiée
+        run: bash .glpi-plugin-security/checks/check-archive.sh .
 
   runtime:
     name: Contrôles dans un vrai GLPI (onglets, notifications, désinstallation)
