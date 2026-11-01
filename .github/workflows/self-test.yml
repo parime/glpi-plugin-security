@@ -49,6 +49,20 @@ jobs:
       - name: secgood doit passer
         run: php checks/check-translations.php tests/fixtures/secgood/locales
 
+  typography:
+    name: Contrôle des tirets cadratins (secbad échoue, secgood passe)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+      - name: secbad doit échouer
+        run: |
+          if bash checks/check-em-dash.sh tests/fixtures/secbad; then
+            echo "::error::le contrôle ne détecte plus le tiret cadratin de secbad"
+            exit 1
+          fi
+      - name: secgood doit passer
+        run: bash checks/check-em-dash.sh tests/fixtures/secgood
+
   archive:
     name: Contrôle de l'archive (sans export-ignore échoue, avec passe)
     runs-on: ubuntu-latest

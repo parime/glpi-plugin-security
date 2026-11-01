@@ -17,7 +17,7 @@ name: Sécurité
 on: [push, pull_request]
 jobs:
   security:
-    uses: parime/glpi-plugin-security/.github/workflows/plugin-security.yml@v1.4.0
+    uses: parime/glpi-plugin-security/.github/workflows/plugin-security.yml@v1.5.0
     with:
       plugin-key: monplugin   # nom du dossier dans plugins/ (plugin_version_monplugin)
       # Facultatif : jeu de données créé avant la désinstallation, pour que le contrôle des
@@ -54,6 +54,13 @@ ni URL, ni JavaScript (`javascript:`, `onerror=`…), ni entité HTML, ni balise
 `##…##`. Les chaînes traduites sont souvent affichées sans échappement (messages de session, aides,
 notifications) : une traduction fournie par un contributeur, une plateforme ou un outil
 automatique ne peut ainsi pas injecter de contenu.
+
+### Typographie (`checks/check-em-dash.sh`)
+
+Aucun tiret cadratin dans les fichiers du plugin suivis par git (hors `vendor`, `node_modules` et
+`.mo`) : chaînes affichées, traductions, documentation. Le remplacer par « : », une virgule, des
+parenthèses, ou « - » pour un séparateur. Un nom historique à retrouver lors d'une migration
+s'écrit avec la séquence d'échappement `"\u{2014}"`.
 
 ### Archive publiée (`checks/check-archive.sh`)
 
