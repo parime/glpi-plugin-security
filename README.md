@@ -17,7 +17,7 @@ name: Sécurité
 on: [push, pull_request]
 jobs:
   security:
-    uses: parime/glpi-plugin-security/.github/workflows/plugin-security.yml@v1.5.0
+    uses: parime/glpi-plugin-security/.github/workflows/plugin-security.yml@v1.6.0
     with:
       plugin-key: monplugin   # nom du dossier dans plugins/ (plugin_version_monplugin)
       # Facultatif : jeu de données créé avant la désinstallation, pour que le contrôle des
@@ -70,6 +70,15 @@ de CI ou d'analyse à la racine du dépôt : `tests/`, `.github/`, `.semgrep/`, 
 `.phpstan-bootstrap.php`, `phpunit*`, `.php-cs-fixer*`, `phpcs.xml*`, `.editorconfig`,
 `.yamllint*`, `.gitignore`, `.gitattributes`, `.glpi-security-exceptions`, `docker-compose*`,
 `package.json`… Un fichier en trop s'exclut avec `export-ignore` dans `.gitattributes`.
+
+### Workflows GitHub Actions (`checks/check-workflows.sh`)
+
+Chaque fichier de `.github/workflows/` doit être un YAML valide à la syntaxe GitHub Actions correcte
+(actionlint 1.7.7, téléchargé et vérifié par son empreinte SHA-256). Un workflow invalide ne démarre
+plus du tout : la CI du plugin se tait au lieu d'échouer, et les PR paraissent vertes. Cas réel : un
+« : » ajouté dans un nom d'étape non cité a coupé la CI d'assetsign pendant deux jours (assetsign
+#295) ; un nom qui contient « : » s'écrit entre guillemets. Les remarques de style des scripts shell
+(shellcheck) ne bloquent pas.
 
 ### Contrôles dans un vrai GLPI (`checks/`)
 
