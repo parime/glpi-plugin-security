@@ -85,6 +85,22 @@ jobs:
           git -C "$d" -c user.name=ci -c user.email=ci@example.org commit -qm fixture
           bash checks/check-archive.sh "$d"
 
+  workflows:
+    name: Contrôle des workflows (secbad échoue, secgood passe)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+      - name: secbad doit échouer
+        run: |
+          if bash checks/check-workflows.sh tests/fixtures/secbad; then
+            echo "::error::le contrôle ne détecte plus le workflow invalide de secbad"
+            exit 1
+          fi
+      - name: secgood doit passer
+        run: bash checks/check-workflows.sh tests/fixtures/secgood
+      - name: les workflows de ce dépôt doivent passer
+        run: bash checks/check-workflows.sh .
+
   shell:
     name: ShellCheck
     runs-on: ubuntu-latest

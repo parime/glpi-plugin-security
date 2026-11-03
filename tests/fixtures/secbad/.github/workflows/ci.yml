@@ -1,0 +1,10 @@
+# Fixture : workflow invalide, check-workflows.sh doit le refuser. Le « : » non cité dans le nom
+# d'étape rend le YAML invalide (cas réel d'assetsign #295).
+name: CI
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Analyse du dépôt (Trivy : secrets et vulnérabilités)
+        run: echo ok

@@ -1,0 +1,9 @@
+# Fixture : workflow valide, check-workflows.sh doit l'accepter.
+name: CI
+on: [push]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Analyse du dépôt (Trivy : secrets et vulnérabilités)"
+        run: echo ok
