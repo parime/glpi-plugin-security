@@ -19,13 +19,13 @@ if [ ${#workflows[@]} -eq 0 ]; then
   exit 0
 fi
 
-version=1.7.7
-sha256=023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757
+version=1.7.12
+sha256=8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
 bin=${ACTIONLINT:-}
 if [ -z "$bin" ]; then
   tmp=$(mktemp -d)
   archive="$tmp/actionlint.tar.gz"
-  curl -fsSL -o "$archive" \
+  curl -fsSL --retry 5 --retry-all-errors --retry-delay 3 -o "$archive" \
     "https://github.com/rhysd/actionlint/releases/download/v${version}/actionlint_${version}_linux_amd64.tar.gz" \
     || { echo "::error::téléchargement d'actionlint impossible"; exit 2; }
   echo "$sha256  $archive" | sha256sum -c --quiet - \
