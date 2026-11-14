@@ -12,6 +12,7 @@ set -uo pipefail
 OWNER=$1
 REVIEWED_FILE=${REVIEWED_FILE:-copy-watch-reviewed.txt}
 SUMMARY=${GITHUB_STEP_SUMMARY:-/dev/stdout}
+PAUSE=${PAUSE:-8}
 
 # Identifiants propres à chaque plugin : espaces de noms PHP, préfixes de tables et de constantes.
 MARKERS=(
@@ -21,13 +22,34 @@ MARKERS=(
   'GlpiPlugin\Dockerinventory' 'glpi_plugin_dockerinventory_' 'PLUGIN_DOCKERINVENTORY_VERSION'
 )
 
+# La recherche de code est limitée en débit : chaque requête est espacée et, si GitHub répond 429,
+# rejouée après le délai qu'il indique (« try again in Ns »), jusqu'à 15 minutes d'attente.
+search() {
+  local out wait attempt
+  for attempt in 1 2 3 4 5; do
+    if out=$(gh search code "$@" 2>&1); then
+      printf '%s' "$out"
+      return 0
+    fi
+    wait=$(grep -o 'try again in [0-9]*' <<< "$out" | grep -o '[0-9]*$' | head -1)
+    if [ -z "$wait" ] || [ "$wait" -gt 900 ]; then
+      printf '%s' "$out"
+      return 1
+    fi
+    echo "limite de la recherche de code : nouvelle tentative $attempt dans $((wait + 2)) s" >&2
+    sleep $((wait + 2))
+  done
+  printf '%s' "$out"
+  return 1
+}
+
 declare -A FOUND=()
 errors=0
 for marker in "${MARKERS[@]}"; do
-  # La recherche de code est limitée en débit : petite pause entre deux requêtes.
-  sleep 7
-  if ! out=$(gh search code "\"$marker\"" --limit 100 --json repository,path \
-      --jq '.[] | [.repository.nameWithOwner, .path] | @tsv' 2>&1); then
+  sleep "$PAUSE"
+  query="\"$marker\""
+  if ! out=$(search "$query" --limit 100 --json repository,path \
+      --jq '.[] | [.repository.nameWithOwner, .path] | @tsv'); then
     echo "::warning::recherche impossible pour « $marker » : $out"
     errors=$((errors + 1))
     continue
@@ -39,8 +61,8 @@ for marker in "${MARKERS[@]}"; do
   done <<< "$out"
 done
 
-if [ "$errors" -eq "${#MARKERS[@]}" ]; then
-  echo "::error::la recherche de code a échoué pour tous les identifiants (jeton sans accès à la recherche ?)"
+if [ "$errors" -gt 0 ]; then
+  echo "::error::$errors recherche(s) sur ${#MARKERS[@]} impossibles : résultat incomplet"
   exit 2
 fi
 
@@ -65,10 +87,10 @@ new=0
 } >> "$SUMMARY"
 
 for repo in "${!FOUND[@]}"; do
-  sleep 7
+  sleep "$PAUSE"
   cites="non trouvé"
-  if gh search code "GUILLOTTE" --repo "$repo" --limit 1 --json path --jq 'length' 2>/dev/null | grep -qv '^0$' \
-     || gh search code "github.com/$OWNER" --repo "$repo" --limit 1 --json path --jq 'length' 2>/dev/null | grep -qv '^0$'; then
+  if search "GUILLOTTE" --repo "$repo" --limit 1 --json path --jq 'length' 2>/dev/null | grep -qv '^0$' \
+     || search "github.com/$OWNER" --repo "$repo" --limit 1 --json path --jq 'length' 2>/dev/null | grep -qv '^0$'; then
     cites="oui"
   fi
   reviewed="non"
