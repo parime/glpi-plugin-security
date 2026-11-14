@@ -1,0 +1,26 @@
+# Surveillance hebdomadaire des reprises du code des plugins (voir checks/watch-copies.sh) : rien
+# n'est publié, le résultat est dans le résumé de l'exécution ; un dépôt nouveau, pas encore examiné,
+# fait échouer l'exécution pour que le propriétaire soit prévenu par e-mail.
+name: Surveillance des reprises de code
+
+on:
+  schedule:
+    - cron: '0 7 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+      - name: Recherche des identifiants des plugins sur GitHub
+        env:
+          # La recherche de code de GitHub exige un jeton d'utilisateur : secret COPY_WATCH_TOKEN
+          # (jeton à grain fin, lecture seule des dépôts publics, sans aucune autre permission).
+          # À défaut, le jeton du workflow est essayé.
+          GH_TOKEN: ${{ secrets.COPY_WATCH_TOKEN || github.token }}
+          OWNER: ${{ github.repository_owner }}
+        run: bash checks/watch-copies.sh "$OWNER"

@@ -1,0 +1,3 @@
+# Dépôts déjà examinés par la surveillance des reprises de code (watch-copies.yml).
+# Un dépôt par ligne, au format propriétaire/dépôt, avec en commentaire la date et la décision
+# (par exemple : cite l'origine, demande de mise en conformité envoyée, faux positif).
