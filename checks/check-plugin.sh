@@ -41,8 +41,7 @@ run notifications; NOTIF=$?
 run menus || true
 
 if [ -n "$SEED" ]; then
-  docker exec -u www-data "$C" sh -c "cd /var/www/glpi && $SEED" >/dev/null \
-    || echo "::warning::la commande de jeu de données a échoué : contrôle des restes sur les seules données d'installation"
+  docker exec -u www-data "$C" sh -c "cd /var/www/glpi && $SEED" \n    || { echo "::error::la commande de jeu de données a échoué : contrôle des restes annulé"; exit 1; }
 fi
 docker exec -u www-data "$C" sh -c "cd /var/www/glpi && php bin/console plugin:deactivate $KEY -n && php bin/console plugin:uninstall $KEY -n" \
   || { echo "::error::désinstallation impossible"; exit 1; }
