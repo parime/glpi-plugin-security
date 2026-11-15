@@ -96,7 +96,9 @@ Le plugin est installé dans le GLPI officiel (11.0.11 par défaut), puis :
   des tables du cœur ne porte un type d'objet, une règle, un droit ou une configuration du plugin.
 - **Menus** (avertissement) : les entrées que le plugin ajoute aux menus de GLPI (hook `menu_toadd`)
   sont listées ; au-delà d'une, une annotation rappelle la charte (une seule entrée de menu d'usage,
-  réglages dans la page du plugin). Sans effet sur le résultat du job.
+  réglages dans la page du plugin). Sans effet sur le résultat du job. Un outil métier complet qui
+  déclare `menus-secteur-metier : <justification>` dans son fichier d'exceptions voit son secteur
+  de menu propre compté comme une seule entrée (charte, section 9).
 
 ### Charte commune (`checks/check-charter.sh`, avertissements)
 

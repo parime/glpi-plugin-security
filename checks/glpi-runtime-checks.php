@@ -355,7 +355,17 @@ if ($mode === 'menus') {
     foreach ($entries as $entry) {
         echo "  {$entry}\n";
     }
-    if (count($entries) > 1) {
+    // Exception « outil métier complet » (charte, section 9) : le secteur propre du plugin compte
+    // pour une seule entrée ; les entrées dans les secteurs natifs restent comptées une à une.
+    $counted = count($entries);
+    if (isset($exceptions['menus-secteur-metier'])) {
+        $native = ['assets', 'helpdesk', 'management', 'tools', 'plugins', 'admin', 'config', 'preference'];
+        $sectorOf = static fn (string $entry): string => explode(' > ', $entry, 2)[0];
+        $own = array_filter($entries, static fn (string $e): bool => !in_array($sectorOf($e), $native, true));
+        $counted = count($entries) - count($own) + count(array_unique(array_map($sectorOf, $own)));
+        echo "Exception « outil métier complet » déclarée : {$counted} entrée(s) comptée(s).\n";
+    }
+    if ($counted > 1) {
         echo '::warning::menus : ' . count($entries) . ' entrées de menu ajoutées par le plugin ('
             . implode(', ', $entries) . "). Charte commune : une seule entrée de menu d'usage au plus, "
             . "avec des onglets ou sous-pages, et les réglages dans la page de configuration du plugin\n";
