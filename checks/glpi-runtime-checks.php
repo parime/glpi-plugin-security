@@ -365,6 +365,14 @@ if ($mode === 'menus') {
         $counted = count($entries) - count($own) + count(array_unique(array_map($sectorOf, $own)));
         echo "Exception « outil métier complet » déclarée : {$counted} entrée(s) comptée(s).\n";
     }
+    // Entrée justifiée dans un secteur natif (objet ITIL à côté des tickets, par exemple) :
+    // ligne « menus-entree-native <secteur> > <classe> : <justification> » ; elle n'est plus comptée.
+    foreach ($entries as $entry) {
+        if (isset($exceptions['menus-entree-native ' . $entry])) {
+            $counted--;
+            echo "Entrée justifiée, non comptée : {$entry}\n";
+        }
+    }
     if ($counted > 1) {
         echo '::warning::menus : ' . count($entries) . ' entrées de menu ajoutées par le plugin ('
             . implode(', ', $entries) . "). Charte commune : une seule entrée de menu d'usage au plus, "

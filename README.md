@@ -99,6 +99,8 @@ Le plugin est installé dans le GLPI officiel (11.0.11 par défaut), puis :
   réglages dans la page du plugin). Sans effet sur le résultat du job. Un outil métier complet qui
   déclare `menus-secteur-metier : <justification>` dans son fichier d'exceptions voit son secteur
   de menu propre compté comme une seule entrée (charte, section 9).
+  Une entrée justifiée dans un secteur natif (par exemple un objet ITIL placé dans Assistance) se
+  déclare par `menus-entree-native <secteur> > <classe> : <justification>` et n'est plus comptée.
 
 ### Charte commune (`checks/check-charter.sh`, avertissements)
 
