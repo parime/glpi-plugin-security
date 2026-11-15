@@ -30,4 +30,6 @@ function plugin_init_secbad(): void
 
     $PLUGIN_HOOKS['csrf_compliant']['secbad'] = true;
     Plugin::registerClass(PluginSecbadThing::class, ['addtabon' => ['Computer']]);
+    // Deux entrées de menu : la charte commune n'en admet qu'une (avertissement « menus »).
+    $PLUGIN_HOOKS['menu_toadd']['secbad'] = ['tools' => PluginSecbadThing::class, 'admin' => [PluginSecbadThing::class]];
 }
