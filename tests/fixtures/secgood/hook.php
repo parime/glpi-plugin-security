@@ -1,5 +1,7 @@
 <?php
 
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 function plugin_secgood_install(): bool
 {
     global $DB;

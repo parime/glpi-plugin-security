@@ -5,7 +5,7 @@
  *
  * Usage (dans le conteneur GLPI, utilisateur www-data, plugin installé et activé sauf pour
  * « leftovers ») :
- *   php glpi-runtime-checks.php <clé du plugin> <tabs|rights|notifications|leftovers> [fichier d'exceptions]
+ *   php glpi-runtime-checks.php <clé du plugin> <tabs|rights|notifications|leftovers|menus> [fichier d'exceptions]
  *
  * - tabs : chaque onglet que le plugin ajoute à un objet du cœur est demandé comme le fait
  *   ajax/common.tabs.php (qui ne consulte jamais getTabNameForItem()), par un profil qui a tous les
@@ -17,6 +17,9 @@
  *   la classe (jamais un identifiant calculé, comme un id d'utilisateur).
  * - leftovers : après désinstallation, plus aucune ligne des tables du cœur ne porte un type
  *   d'objet, un droit, une règle ou une configuration du plugin.
+ * - menus (avertissement seulement, code de sortie toujours 0) : entrées que le plugin ajoute aux
+ *   menus de GLPI (hook menu_toadd). Charte commune : une seule entrée de menu d'usage au plus,
+ *   les réglages dans la page de configuration du plugin (Configuration > Plugins).
  *
  * Fichier d'exceptions : une ligne par exception justifiée, « <contrôle> <identifiant> : <raison> »,
  * l'identifiant étant celui qu'affiche le contrôle en échec. Lignes vides et « # » ignorées.
@@ -28,8 +31,8 @@
 declare(strict_types=1);
 
 [$script, $key, $mode, $exceptionsFile] = $argv + [null, '', '', ''];
-if ($key === '' || !in_array($mode, ['tabs', 'rights', 'notifications', 'leftovers'], true)) {
-    fwrite(STDERR, "Usage : php {$script} <clé du plugin> <tabs|rights|notifications|leftovers> [exceptions]\n");
+if ($key === '' || !in_array($mode, ['tabs', 'rights', 'notifications', 'leftovers', 'menus'], true)) {
+    fwrite(STDERR, "Usage : php {$script} <clé du plugin> <tabs|rights|notifications|leftovers|menus> [exceptions]\n");
     exit(2);
 }
 
@@ -337,6 +340,28 @@ if ($mode === 'leftovers') {
         }
     }
     echo count($checks) . " colonne(s) des tables du cœur contrôlée(s) après désinstallation.\n";
+}
+
+if ($mode === 'menus') {
+    global $PLUGIN_HOOKS;
+    // Format du cœur : secteur => classe ou liste de classes (Html::generateMenuSession()).
+    $entries = [];
+    foreach ((array) ($PLUGIN_HOOKS[\Glpi\Plugin\Hooks::MENU_TOADD][$key] ?? []) as $sector => $classes) {
+        foreach ((array) $classes as $class) {
+            $entries[] = $sector . ' > ' . (is_string($class) ? $class : get_debug_type($class));
+        }
+    }
+    echo 'MENUS ' . count($entries) . " entrée(s) de menu\n";
+    foreach ($entries as $entry) {
+        echo "  {$entry}\n";
+    }
+    if (count($entries) > 1) {
+        echo '::warning::menus : ' . count($entries) . ' entrées de menu ajoutées par le plugin ('
+            . implode(', ', $entries) . "). Charte commune : une seule entrée de menu d'usage au plus, "
+            . "avec des onglets ou sous-pages, et les réglages dans la page de configuration du plugin\n";
+    }
+    // Avertissement seulement : la règle n'est pas encore bloquante (voir README).
+    exit(0);
 }
 
 exit($failures > 0 ? 1 : 0);

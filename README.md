@@ -17,7 +17,7 @@ name: Sécurité
 on: [push, pull_request]
 jobs:
   security:
-    uses: parime/glpi-plugin-security/.github/workflows/plugin-security.yml@v1.6.1
+    uses: parime/glpi-plugin-security/.github/workflows/plugin-security.yml@v1.7.0
     with:
       plugin-key: monplugin   # nom du dossier dans plugins/ (plugin_version_monplugin)
       # Facultatif : jeu de données créé avant la désinstallation, pour que le contrôle des
@@ -94,6 +94,31 @@ Le plugin est installé dans le GLPI officiel (11.0.11 par défaut), puis :
   constante du cœur ou de la classe (jamais un identifiant calculé).
 - **Désinstallation** : après le jeu de données facultatif puis la désinstallation, plus aucune ligne
   des tables du cœur ne porte un type d'objet, une règle, un droit ou une configuration du plugin.
+- **Menus** (avertissement) : les entrées que le plugin ajoute aux menus de GLPI (hook `menu_toadd`)
+  sont listées ; au-delà d'une, une annotation rappelle la charte (une seule entrée de menu d'usage,
+  réglages dans la page du plugin). Sans effet sur le résultat du job.
+
+### Charte commune (`checks/check-charter.sh`, avertissements)
+
+La part mécanique de la [charte commune des plugins](https://github.com/parime/glpi-plugin-template/blob/main/CHARTE.md) :
+
+- `LICENSE` (GNU GPL v3), `NOTICE`, `CITATION.cff`, `AGENTS.md`, `SECURITY.md` présents ;
+- licence `GPL-3.0-or-later` déclarée dans `setup.php`, `composer.json` et `CITATION.cff` ;
+- en-tête de licence dans les 30 premières lignes de chaque fichier PHP et Twig suivi par git (hors
+  `vendor`, `node_modules`, `tests` et fichiers cachés comme `.github/`) : le bloc de `tools/HEADER`
+  ou la ligne `SPDX-License-Identifier: GPL-3.0-or-later` ;
+- `README.md` (français) avec sa section « Réutilisation et citation », `README.en.md` avec
+  « Reuse and citation », `CHANGELOG.md` avec `## [Unreleased]` (Keep a Changelog) ;
+- lien vers `CHARTE.md` dans `AGENTS.md` et `README.md` ;
+- les 18 langues communes dans `locales/` : de_DE, en_GB, en_US, es_419, es_AR, es_CL, es_CO, es_EC,
+  es_ES, es_MX, es_VE, fr_BE, fr_CA, fr_FR, it_IT, pl_PL, pt_BR, pt_PT.
+
+**Mode avertissement (v1.7.x)** : les écarts sont annotés (`::warning::`) sans faire échouer le job,
+le temps que chaque plugin corrige les siens (issues ouvertes dans chaque dépôt). **Passage en
+bloquant** : un plugin conforme peut l'activer dès maintenant avec `charter-mode: error` dans son
+`security.yml`. Quand les quatre plugins sont conformes, une version mineure suivante (v1.8.0) passe
+le défaut de `charter-mode` à `error` et le contrôle des menus en erreur (avec exception justifiée
+possible dans `.glpi-security-exceptions`), annoncée dans ses notes de version.
 
 ## Exceptions justifiées
 

@@ -1,5 +1,7 @@
 <?php
 
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Onglet des profils : le droit du plugin s'attribue depuis l'interface, comme ceux du cœur.
 class PluginSecgoodProfile extends CommonGLPI
 {

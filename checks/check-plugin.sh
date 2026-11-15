@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Contrôle un plugin dans le GLPI démarré par start-glpi.sh : installation, onglets sans droit,
 # droits du plugin attribuables depuis les profils,
-# cibles de notification, jeu de données facultatif, désinstallation, restes dans le cœur.
+# cibles de notification, entrées de menu (avertissement), jeu de données facultatif,
+# désinstallation, restes dans le cœur.
 #
 # Usage : check-plugin.sh <dossier du plugin> <clé du plugin> [fichier d'exceptions] [commande de jeu de données]
 #   La commande de jeu de données s'exécute dans le conteneur (dossier de GLPI, utilisateur www-data)
@@ -36,6 +37,8 @@ run() { docker exec -u www-data "$C" php /tmp/glpi-runtime-checks.php "$KEY" "$1
 run tabs; TABS=$?
 run rights; RIGHTS=$?
 run notifications; NOTIF=$?
+# Entrées de menu ajoutées : avertissement seulement (charte commune), sans effet sur RESULT.
+run menus || true
 
 if [ -n "$SEED" ]; then
   docker exec -u www-data "$C" sh -c "cd /var/www/glpi && $SEED" >/dev/null \

@@ -1,5 +1,7 @@
 <?php
 
+// SPDX-License-Identifier: GPL-3.0-or-later
+
 // Plugin de test de glpi-plugin-security (version correcte).
 define('PLUGIN_SECGOOD_VERSION', '1.0.0');
 
@@ -31,4 +33,6 @@ function plugin_init_secgood(): void
     $PLUGIN_HOOKS['csrf_compliant']['secgood'] = true;
     Plugin::registerClass(PluginSecgoodThing::class, ['addtabon' => ['Computer']]);
     Plugin::registerClass(PluginSecgoodProfile::class, ['addtabon' => ['Profile']]);
+    // Une seule entrée de menu d'usage (charte commune).
+    $PLUGIN_HOOKS['menu_toadd']['secgood'] = ['tools' => [PluginSecgoodThing::class]];
 }
