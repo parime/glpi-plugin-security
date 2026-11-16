@@ -21,7 +21,7 @@ for f in front/*.php ajax/*.php; do
   if grep -qF "$f" "$MATRIX"; then
     continue
   fi
-  if [ -f "$EXEMPT" ] && grep -qE "^$f[[:space:]]*:[[:space:]]*[^[:space:]]" "$EXEMPT"; then
+  if [ -f "$EXEMPT" ] && grep -qE "^${f}[[:space:]]*:[[:space:]]*[^[:space:]]" "$EXEMPT"; then
     continue
   fi
   echo "::error file=$f::page absente de $MATRIX (ni testee, ni justifiee dans $EXEMPT)"

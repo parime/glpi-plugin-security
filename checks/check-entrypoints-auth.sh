@@ -13,8 +13,8 @@ for f in front/*.php ajax/*.php; do
   if grep -qE 'Session::check(Right|RightsOr|SeveralRightsOr|LoginUser|CentralAccess|HelpdeskAccess)\(|->check\(' "$f"; then
     continue
   fi
-  if [ -f "$ALLOWLIST" ] && grep -qE "^$f[[:space:]]*:[[:space:]]*[^[:space:]]" "$ALLOWLIST"; then
-    echo "exception justifiee : $(grep -E "^$f[[:space:]]*:" "$ALLOWLIST")"
+  if [ -f "$ALLOWLIST" ] && grep -qE "^${f}[[:space:]]*:[[:space:]]*[^[:space:]]" "$ALLOWLIST"; then
+    echo "exception justifiee : $(grep -E "^${f}[[:space:]]*:" "$ALLOWLIST")"
     continue
   fi
   echo "::error file=$f::point d'entree sans controle d'autorisation (Session::checkRight/checkLoginUser/->check()) ni exception justifiee dans $ALLOWLIST"
