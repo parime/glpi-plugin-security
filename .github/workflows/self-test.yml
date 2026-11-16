@@ -132,6 +132,32 @@ jobs:
       - name: secgood doit passer en mode bloquant
         run: bash checks/check-charter.sh tests/fixtures/secgood error
 
+  entrypoints:
+    name: Points d'entrée, matrice d'accès et exigences marketplace (secbad échoue, secgood passe)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+      - name: secbad doit échouer aux trois contrôles
+        run: |
+          for check in "sh checks/check-entrypoints-auth.sh" "sh checks/check-security-matrix-coverage.sh" \
+                       "php checks/check-marketplace-readiness.php"; do
+            if $check tests/fixtures/secbad; then
+              echo "::error::$check ne détecte plus le défaut volontaire de secbad"
+              exit 1
+            fi
+          done
+      - name: secgood doit passer
+        run: |
+          sh checks/check-entrypoints-auth.sh tests/fixtures/secgood
+          sh checks/check-security-matrix-coverage.sh tests/fixtures/secgood
+          php checks/check-marketplace-readiness.php tests/fixtures/secgood
+      - name: sans matrice d'accès, avertissement sans échec
+        run: |
+          d=$(mktemp -d); mkdir "$d/front"; cp tests/fixtures/secgood/front/thing.php "$d/front/"
+          out=$(sh checks/check-security-matrix-coverage.sh "$d") \
+            || { echo "$out"; echo "::error::une matrice absente ne doit pas faire échouer"; exit 1; }
+          grep -q "::warning::" <<< "$out" || { echo "::error::une matrice absente doit être signalée"; exit 1; }
+
   shell:
     name: ShellCheck
     runs-on: ubuntu-latest
