@@ -46,6 +46,11 @@ on:
         required: false
         type: string
         default: warning
+      access-matrix-file:
+        description: "Fichier de la matrice d'accès du plugin (script de bout en bout ou test PHPUnit), relatif au dépôt"
+        required: false
+        type: string
+        default: tests/security/access-matrix.sh
 
 permissions:
   contents: read
@@ -161,8 +166,10 @@ jobs:
       # .github/twig-baseline.txt, .github/marketplace-allowlist.txt).
       - name: Chaque point d'entrée (front/, ajax/) contrôle les droits
         run: sh .glpi-plugin-security/checks/check-entrypoints-auth.sh .
-      - name: Chaque page figure dans la matrice d'accès (tests/security/access-matrix.sh)
-        run: sh .glpi-plugin-security/checks/check-security-matrix-coverage.sh .
+      - name: Chaque page figure dans la matrice d'accès (${{ inputs.access-matrix-file }})
+        env:
+          ACCESS_MATRIX_FILE: ${{ inputs.access-matrix-file }}
+        run: sh .glpi-plugin-security/checks/check-security-matrix-coverage.sh . "$ACCESS_MATRIX_FILE"
       - name: Pas de SQL brut hors installation, pas de nouveau HTML écrit en PHP
         run: php .glpi-plugin-security/checks/check-marketplace-readiness.php .
 
