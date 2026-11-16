@@ -40,7 +40,8 @@ on:
         description: Version des règles et contrôles communs (étiquette de parime/glpi-plugin-security)
         required: false
         type: string
-        default: v1.8.0
+        # À passer à la nouvelle étiquette dans le commit étiqueté (contrôlé par self-test.yml).
+        default: v1.8.2
       charter-mode:
         description: "Charte commune : warning (avertissements, par défaut) ou error (bloquant)"
         required: false
