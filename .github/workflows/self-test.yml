@@ -10,6 +10,25 @@ permissions:
   contents: read
 
 jobs:
+  security-ref:
+    name: Étiquette et version par défaut des contrôles
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # Sur une étiquette vX.Y.Z, plugin-security.yml doit utiliser par défaut les scripts de cette même
+      # version : sinon les plugins qui appellent @vX.Y.Z exécutent les contrôles de la version d'avant.
+      - name: security-ref par défaut = étiquette publiée
+        if: github.ref_type == 'tag'
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          default=$(awk '/security-ref:/{f=1} f && /default:/{print $2; exit}' .github/workflows/plugin-security.yml)
+          if [ "$default" != "$TAG" ]; then
+            echo "::error::security-ref vaut $default par défaut dans plugin-security.yml, l'étiquette est $TAG"
+            exit 1
+          fi
+          echo "security-ref par défaut : $default"
+
   semgrep-rules:
     name: Règles Semgrep (cas de test)
     runs-on: ubuntu-latest

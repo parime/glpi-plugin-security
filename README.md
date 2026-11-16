@@ -155,7 +155,9 @@ Pour Semgrep, `// nosemgrep: <id de la règle>` sur la ligne, avec un commentair
    `ok:`) ou le défaut dans `tests/fixtures/secbad` (et sa correction dans `secgood`).
 2. L'auto-test doit passer.
 3. Publier une nouvelle étiquette `vX.Y.Z` (jamais déplacer une étiquette publiée), avec
-   `default: vX.Y.Z` pour `security-ref` dans `plugin-security.yml`.
+   `default: vX.Y.Z` pour `security-ref` dans `plugin-security.yml`, dans le commit étiqueté.
+   L'auto-test le vérifie sur chaque étiquette : sans cela, les plugins qui appellent `@vX.Y.Z`
+   exécutent les scripts de la version précédente (cas de v1.7.1 et v1.8.1).
 4. Dans chaque plugin, une PR passe `@vX.Y.Z` dans `.github/workflows/security.yml` : une règle
    plus stricte arrive avec ses corrections, jamais en cassant la CI sans prévenir.
 
