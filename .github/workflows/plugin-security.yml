@@ -6,7 +6,7 @@
 #   on: [push, pull_request]
 #   jobs:
 #     security:
-#       uses: parime/glpi-plugin-security/.github/workflows/plugin-security.yml@v1.7.0
+#       uses: parime/glpi-plugin-security/.github/workflows/plugin-security.yml@v1.8.0
 #       with:
 #         plugin-key: monplugin            # nom du dossier du plugin dans plugins/
 #         # seed-command: php plugins/monplugin/tests/security/setup.php   (facultatif)
@@ -40,7 +40,7 @@ on:
         description: Version des règles et contrôles communs (étiquette de parime/glpi-plugin-security)
         required: false
         type: string
-        default: v1.7.0
+        default: v1.8.0
       charter-mode:
         description: "Charte commune : warning (avertissements, par défaut) ou error (bloquant)"
         required: false
@@ -145,6 +145,26 @@ jobs:
         env:
           MODE: ${{ inputs.charter-mode }}
         run: bash .glpi-plugin-security/checks/check-charter.sh . "$MODE"
+
+  entrypoints:
+    name: Points d'entrée, matrice d'accès et exigences marketplace
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+        with:
+          repository: parime/glpi-plugin-security
+          ref: ${{ inputs.security-ref }}
+          path: .glpi-plugin-security
+      # Repris de .github/scripts/ des plugins (issue #11) : chaque plugin garde ses fichiers de
+      # réglage (.github/security-entrypoints-allowlist.txt, tests/security/not-covered.txt,
+      # .github/twig-baseline.txt, .github/marketplace-allowlist.txt).
+      - name: Chaque point d'entrée (front/, ajax/) contrôle les droits
+        run: sh .glpi-plugin-security/checks/check-entrypoints-auth.sh .
+      - name: Chaque page figure dans la matrice d'accès (tests/security/access-matrix.sh)
+        run: sh .glpi-plugin-security/checks/check-security-matrix-coverage.sh .
+      - name: Pas de SQL brut hors installation, pas de nouveau HTML écrit en PHP
+        run: php .glpi-plugin-security/checks/check-marketplace-readiness.php .
 
   runtime:
     name: Contrôles dans un vrai GLPI (onglets, notifications, désinstallation)

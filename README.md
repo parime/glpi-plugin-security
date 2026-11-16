@@ -17,7 +17,7 @@ name: Sécurité
 on: [push, pull_request]
 jobs:
   security:
-    uses: parime/glpi-plugin-security/.github/workflows/plugin-security.yml@v1.7.0
+    uses: parime/glpi-plugin-security/.github/workflows/plugin-security.yml@v1.8.0
     with:
       plugin-key: monplugin   # nom du dossier dans plugins/ (plugin_version_monplugin)
       # Facultatif : jeu de données créé avant la désinstallation, pour que le contrôle des
@@ -102,6 +102,20 @@ Le plugin est installé dans le GLPI officiel (11.0.11 par défaut), puis :
   Une entrée justifiée dans un secteur natif (par exemple un objet ITIL placé dans Assistance) se
   déclare par `menus-entree-native <secteur> > <classe> : <justification>` et n'est plus comptée.
 
+### Points d'entrée, matrice d'accès et exigences marketplace (`checks/`)
+
+Ces trois contrôles étaient auparavant copiés dans `.github/scripts/` de chaque plugin (issue #11).
+Chaque plugin garde ses fichiers de réglage dans son dépôt.
+
+| Contrôle | Défaut détecté | Réglage dans le plugin |
+|---|---|---|
+| `check-entrypoints-auth.sh` | Page `front/` ou `ajax/` sans contrôle d'autorisation (`Session::checkRight`, `checkLoginUser`, `->check()`…) | Exception justifiée dans `.github/security-entrypoints-allowlist.txt` (`front/x.php : raison`) |
+| `check-security-matrix-coverage.sh` | Page absente du test de contrôle d'accès `tests/security/access-matrix.sh` | Exception justifiée dans `tests/security/not-covered.txt`. Sans matrice (nouveau plugin), simple avertissement : modèle dans `scripts/security/` |
+| `check-marketplace-readiness.php` | SQL brut hors installation ; plus de HTML écrit en PHP que la référence | Exception dans `.github/marketplace-allowlist.txt` ; référence `.github/twig-baseline.txt`, à régénérer avec `--update-baseline` quand elle baisse |
+
+Lancement local, depuis le dossier du plugin :
+`php <glpi-plugin-security>/checks/check-marketplace-readiness.php . [--update-baseline]`.
+
 ### Charte commune (`checks/check-charter.sh`, avertissements)
 
 La part mécanique de la [charte commune des plugins](https://github.com/parime/glpi-plugin-template/blob/main/CHARTE.md) :
@@ -117,10 +131,10 @@ La part mécanique de la [charte commune des plugins](https://github.com/parime/
 - les 18 langues communes dans `locales/` : de_DE, en_GB, en_US, es_419, es_AR, es_CL, es_CO, es_EC,
   es_ES, es_MX, es_VE, fr_BE, fr_CA, fr_FR, it_IT, pl_PL, pt_BR, pt_PT.
 
-**Mode avertissement (v1.7.x)** : les écarts sont annotés (`::warning::`) sans faire échouer le job,
+**Mode avertissement (v1.7.x et v1.8.x)** : les écarts sont annotés (`::warning::`) sans faire échouer le job,
 le temps que chaque plugin corrige les siens (issues ouvertes dans chaque dépôt). **Passage en
 bloquant** : un plugin conforme peut l'activer dès maintenant avec `charter-mode: error` dans son
-`security.yml`. Quand les quatre plugins sont conformes, une version mineure suivante (v1.8.0) passe
+`security.yml`. Quand les quatre plugins sont conformes, une version mineure suivante passe
 le défaut de `charter-mode` à `error` et le contrôle des menus en erreur (avec exception justifiée
 possible dans `.glpi-security-exceptions`), annoncée dans ses notes de version.
 
