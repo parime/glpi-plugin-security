@@ -45,24 +45,24 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
       - run: bash checks/start-glpi.sh
-      - name: secbad doit échouer aux quatre contrôles
+      - name: secbad doit échouer aux cinq contrôles
         run: |
           out=$(bash checks/check-plugin.sh tests/fixtures/secbad secbad || true)
           echo "$out"
-          grep -q "RESULT tabs=1 rights=1 notifications=1 leftovers=1" <<< "$out" \
+          grep -q "RESULT tabs=1 rights=1 notifications=1 leftovers=1 menus=1" <<< "$out" \
             || { echo "::error::un contrôle ne détecte plus le défaut volontaire de secbad"; exit 1; }
           grep -q "MENUS 2 entrée(s) de menu" <<< "$out" \
             || { echo "::error::le contrôle des menus ne compte plus les deux entrées de secbad"; exit 1; }
-          grep -q "::warning::menus" <<< "$out" \
-            || { echo "::error::le contrôle des menus n'avertit plus pour secbad"; exit 1; }
+          grep -q "::error::menus" <<< "$out" \
+            || { echo "::error::le contrôle des menus ne bloque plus pour secbad"; exit 1; }
       - name: secgood doit passer
         run: |
           out=$(bash checks/check-plugin.sh tests/fixtures/secgood secgood) || { echo "$out"; exit 1; }
           echo "$out"
           grep -q "MENUS 1 entrée(s) de menu" <<< "$out" \
             || { echo "::error::le contrôle des menus ne compte plus l'entrée de secgood"; exit 1; }
-          if grep -q "::warning::menus" <<< "$out"; then
-            echo "::error::le contrôle des menus avertit pour une seule entrée"; exit 1
+          if grep -q "::error::menus" <<< "$out"; then
+            echo "::error::le contrôle des menus bloque pour une seule entrée"; exit 1
           fi
 
   translations:
