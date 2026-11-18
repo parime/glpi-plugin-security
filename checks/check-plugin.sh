@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Contrôle un plugin dans le GLPI démarré par start-glpi.sh : installation, onglets sans droit,
 # droits du plugin attribuables depuis les profils,
-# cibles de notification, entrées de menu (avertissement), jeu de données facultatif,
+# cibles de notification, entrées de menu (une seule au plus), jeu de données facultatif,
 # désinstallation, restes dans le cœur.
 #
 # Usage : check-plugin.sh <dossier du plugin> <clé du plugin> [fichier d'exceptions] [commande de jeu de données]
 #   La commande de jeu de données s'exécute dans le conteneur (dossier de GLPI, utilisateur www-data)
 #   avant la désinstallation, pour que le contrôle des restes porte sur de vraies données.
 #
-# Sortie : une ligne « RESULT tabs=<0|1> rights=<0|1> notifications=<0|1> leftovers=<0|1> », code 1 si un
+# Sortie : une ligne « RESULT tabs=<0|1> rights=<0|1> notifications=<0|1> leftovers=<0|1> menus=<0|1> », code 1 si un
 # contrôle échoue.
 set -uo pipefail
 DIR=$1 KEY=$2 EXCEPTIONS=${3:-} SEED=${4:-}
@@ -37,8 +37,8 @@ run() { docker exec -u www-data "$C" php /tmp/glpi-runtime-checks.php "$KEY" "$1
 run tabs; TABS=$?
 run rights; RIGHTS=$?
 run notifications; NOTIF=$?
-# Entrées de menu ajoutées : avertissement seulement (charte commune), sans effet sur RESULT.
-run menus || true
+# Entrées de menu ajoutées : une seule au plus (charte commune), bloquant depuis v1.9.0.
+run menus; MENUS=$?
 
 if [ -n "$SEED" ]; then
   docker exec -u www-data "$C" sh -c "cd /var/www/glpi && $SEED" \
@@ -52,5 +52,6 @@ TABS=$([ $TABS -eq 0 ] && echo 0 || echo 1)
 RIGHTS=$([ $RIGHTS -eq 0 ] && echo 0 || echo 1)
 NOTIF=$([ $NOTIF -eq 0 ] && echo 0 || echo 1)
 LEFT=$([ $LEFT -eq 0 ] && echo 0 || echo 1)
-echo "RESULT tabs=$TABS rights=$RIGHTS notifications=$NOTIF leftovers=$LEFT"
-[ "$TABS$RIGHTS$NOTIF$LEFT" = "0000" ]
+MENUS=$([ $MENUS -eq 0 ] && echo 0 || echo 1)
+echo "RESULT tabs=$TABS rights=$RIGHTS notifications=$NOTIF leftovers=$LEFT menus=$MENUS"
+[ "$TABS$RIGHTS$NOTIF$LEFT$MENUS" = "00000" ]

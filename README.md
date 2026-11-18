@@ -17,7 +17,7 @@ name: Sécurité
 on: [push, pull_request]
 jobs:
   security:
-    uses: parime/glpi-plugin-security/.github/workflows/plugin-security.yml@v1.8.0
+    uses: parime/glpi-plugin-security/.github/workflows/plugin-security.yml@v1.9.0
     with:
       plugin-key: monplugin   # nom du dossier dans plugins/ (plugin_version_monplugin)
       # Facultatif : jeu de données créé avant la désinstallation, pour que le contrôle des
@@ -94,9 +94,9 @@ Le plugin est installé dans le GLPI officiel (11.0.11 par défaut), puis :
   constante du cœur ou de la classe (jamais un identifiant calculé).
 - **Désinstallation** : après le jeu de données facultatif puis la désinstallation, plus aucune ligne
   des tables du cœur ne porte un type d'objet, une règle, un droit ou une configuration du plugin.
-- **Menus** (avertissement) : les entrées que le plugin ajoute aux menus de GLPI (hook `menu_toadd`)
-  sont listées ; au-delà d'une, une annotation rappelle la charte (une seule entrée de menu d'usage,
-  réglages dans la page du plugin). Sans effet sur le résultat du job. Un outil métier complet qui
+- **Menus** (bloquant depuis v1.9.0) : les entrées que le plugin ajoute aux menus de GLPI (hook
+  `menu_toadd`) sont listées ; au-delà d'une, le job échoue (charte : une seule entrée de menu
+  d'usage, réglages dans la page du plugin). Un outil métier complet qui
   déclare `menus-secteur-metier : <justification>` dans son fichier d'exceptions voit son secteur
   de menu propre compté comme une seule entrée (charte, section 9).
   Une entrée justifiée dans un secteur natif (par exemple un objet ITIL placé dans Assistance) se
@@ -116,7 +116,7 @@ Chaque plugin garde ses fichiers de réglage dans son dépôt.
 Lancement local, depuis le dossier du plugin :
 `php <glpi-plugin-security>/checks/check-marketplace-readiness.php . [--update-baseline]`.
 
-### Charte commune (`checks/check-charter.sh`, avertissements)
+### Charte commune (`checks/check-charter.sh`, bloquant)
 
 La part mécanique de la [charte commune des plugins](https://github.com/parime/glpi-plugin-template/blob/main/CHARTE.md) :
 
@@ -131,12 +131,12 @@ La part mécanique de la [charte commune des plugins](https://github.com/parime/
 - les 18 langues communes dans `locales/` : de_DE, en_GB, en_US, es_419, es_AR, es_CL, es_CO, es_EC,
   es_ES, es_MX, es_VE, fr_BE, fr_CA, fr_FR, it_IT, pl_PL, pt_BR, pt_PT.
 
-**Mode avertissement (v1.7.x et v1.8.x)** : les écarts sont annotés (`::warning::`) sans faire échouer le job,
-le temps que chaque plugin corrige les siens (issues ouvertes dans chaque dépôt). **Passage en
-bloquant** : un plugin conforme peut l'activer dès maintenant avec `charter-mode: error` dans son
-`security.yml`. Quand les quatre plugins sont conformes, une version mineure suivante passe
-le défaut de `charter-mode` à `error` et le contrôle des menus en erreur (avec exception justifiée
-possible dans `.glpi-security-exceptions`), annoncée dans ses notes de version.
+**Bloquant par défaut depuis v1.9.0** : tout écart fait échouer le job (`::error::`). Les quatre
+plugins (GRC Manager, Configuration GLPI Auto, AssetSign, Docker Inventory) étaient conformes en
+mode bloquant avant ce changement. En v1.7.x et v1.8.x, le défaut était `warning` (annotations sans
+échec). Un plugin en cours de mise en conformité (nouveau plugin repris d'un existant, par exemple)
+peut repasser temporairement en avertissement avec `charter-mode: warning` dans son `security.yml`,
+le temps d'une issue de mise en conformité ouverte dans son dépôt.
 
 ## Exceptions justifiées
 

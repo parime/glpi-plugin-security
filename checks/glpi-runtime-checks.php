@@ -17,9 +17,10 @@
  *   la classe (jamais un identifiant calculé, comme un id d'utilisateur).
  * - leftovers : après désinstallation, plus aucune ligne des tables du cœur ne porte un type
  *   d'objet, un droit, une règle ou une configuration du plugin.
- * - menus (avertissement seulement, code de sortie toujours 0) : entrées que le plugin ajoute aux
- *   menus de GLPI (hook menu_toadd). Charte commune : une seule entrée de menu d'usage au plus,
- *   les réglages dans la page de configuration du plugin (Configuration > Plugins).
+ * - menus (bloquant depuis v1.9.0) : entrées que le plugin ajoute aux menus de GLPI (hook
+ *   menu_toadd). Charte commune : une seule entrée de menu d'usage au plus, les réglages dans la
+ *   page de configuration du plugin (Configuration > Plugins). Exceptions justifiées :
+ *   « menus-secteur-metier » et « menus-entree-native <secteur> > <classe> ».
  *
  * Fichier d'exceptions : une ligne par exception justifiée, « <contrôle> <identifiant> : <raison> »,
  * l'identifiant étant celui qu'affiche le contrôle en échec. Lignes vides et « # » ignorées.
@@ -374,11 +375,13 @@ if ($mode === 'menus') {
         }
     }
     if ($counted > 1) {
-        echo '::warning::menus : ' . count($entries) . ' entrées de menu ajoutées par le plugin ('
+        echo '::error::menus : ' . count($entries) . ' entrées de menu ajoutées par le plugin ('
             . implode(', ', $entries) . "). Charte commune : une seule entrée de menu d'usage au plus, "
-            . "avec des onglets ou sous-pages, et les réglages dans la page de configuration du plugin\n";
+            . "avec des onglets ou sous-pages, et les réglages dans la page de configuration du plugin. "
+            . "Exception justifiée possible dans le fichier d'exceptions (menus-secteur-metier, "
+            . "menus-entree-native <secteur> > <classe>), voir le README de glpi-plugin-security\n";
+        exit(1);
     }
-    // Avertissement seulement : la règle n'est pas encore bloquante (voir README).
     exit(0);
 }
 

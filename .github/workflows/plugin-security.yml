@@ -41,12 +41,12 @@ on:
         required: false
         type: string
         # À passer à la nouvelle étiquette dans le commit étiqueté (contrôlé par self-test.yml).
-        default: v1.8.2
+        default: v1.9.0
       charter-mode:
-        description: "Charte commune : warning (avertissements, par défaut) ou error (bloquant)"
+        description: "Charte commune : error (bloquant, par défaut depuis v1.9.0) ou warning (avertissements)"
         required: false
         type: string
-        default: warning
+        default: error
       access-matrix-file:
         description: "Fichier de la matrice d'accès du plugin (script de bout en bout ou test PHPUnit), relatif au dépôt"
         required: false
@@ -145,8 +145,8 @@ jobs:
           repository: parime/glpi-plugin-security
           ref: ${{ inputs.security-ref }}
           path: .glpi-plugin-security
-      # CHARTE.md de parime/glpi-plugin-template. Avertissements seulement par défaut : les écarts
-      # sont annotés sans bloquer, jusqu'à ce que la charte devienne bloquante (voir README).
+      # CHARTE.md de parime/glpi-plugin-template. Bloquant par défaut depuis v1.9.0 ; un plugin en
+      # cours de mise en conformité peut repasser temporairement en charter-mode: warning.
       - name: Licence, en-têtes, documentation et langues
         env:
           MODE: ${{ inputs.charter-mode }}
