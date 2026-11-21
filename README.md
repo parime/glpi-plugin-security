@@ -17,7 +17,7 @@ name: Sécurité
 on: [push, pull_request]
 jobs:
   security:
-    uses: parime/glpi-plugin-security/.github/workflows/plugin-security.yml@v1.9.0
+    uses: parime/glpi-plugin-security/.github/workflows/plugin-security.yml@v1.9.1
     with:
       plugin-key: monplugin   # nom du dossier dans plugins/ (plugin_version_monplugin)
       # Facultatif : jeu de données créé avant la désinstallation, pour que le contrôle des
@@ -110,7 +110,7 @@ Chaque plugin garde ses fichiers de réglage dans son dépôt.
 | Contrôle | Défaut détecté | Réglage dans le plugin |
 |---|---|---|
 | `check-entrypoints-auth.sh` | Page `front/` ou `ajax/` sans contrôle d'autorisation (`Session::checkRight`, `checkLoginUser`, `->check()`…) | Exception justifiée dans `.github/security-entrypoints-allowlist.txt` (`front/x.php : raison`) |
-| `check-security-matrix-coverage.sh` | Page absente du test de contrôle d'accès `tests/security/access-matrix.sh` | Exception justifiée dans `tests/security/not-covered.txt`. Sans matrice (nouveau plugin), simple avertissement : modèle dans `scripts/security/`. Une matrice écrite en PHPUnit se déclare par l'entrée `access-matrix-file` (par exemple `tests/Integration/AccessControlTest.php`) |
+| `check-security-matrix-coverage.sh` | Page absente du test de contrôle d'accès `tests/security/access-matrix.sh` | Exception justifiée dans `tests/security/not-covered.txt`. Sans matrice (nouveau plugin), simple avertissement : modèle dans `scripts/security/`. Une matrice écrite en PHPUnit se déclare par l'entrée `access-matrix-file` (par exemple `tests/Integration/AccessControlTest.php`). Une page peut aussi être testée dans un fragment du dossier voisin `tests/security/access-matrix.d/` (une fonctionnalité = un fichier, chargé par la matrice) |
 | `check-marketplace-readiness.php` | SQL brut hors installation ; plus de HTML écrit en PHP que la référence | Exception dans `.github/marketplace-allowlist.txt` ; référence `.github/twig-baseline.txt`, à régénérer avec `--update-baseline` quand elle baisse |
 
 Lancement local, depuis le dossier du plugin :
