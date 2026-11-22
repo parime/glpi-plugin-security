@@ -64,8 +64,9 @@ trap 'restore; rm -rf "$W"' EXIT
 
 echo "== Installation neuve du code de la PR (référence)"
 deploy "$DIR" || exit 1
-console plugin:install "$KEY" --force -n && console plugin:activate "$KEY" -n \
-  || { echo "::error::installation neuve du code de la PR impossible"; exit 1; }
+if ! console plugin:install "$KEY" --force -n || ! console plugin:activate "$KEY" -n; then
+  echo "::error::installation neuve du code de la PR impossible"; exit 1
+fi
 snapshot fresh || { echo "::error::instantané de l'installation neuve impossible"; exit 1; }
 
 [ -n "$OLD" ] && [ -d "$OLD" ] || skip "aucune version publiée du plugin (premier plugin ou release sans archive) : mise à jour non testée, seule l'installation neuve l'a été"
