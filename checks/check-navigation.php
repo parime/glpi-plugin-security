@@ -868,7 +868,11 @@ foreach ($phpFiles as $php) {
     if (preg_match('/function\s+(is(?:Module|Framework|Feature)?Enabled)\s*\(/', $code, $m) && preg_match('/^\s*(?:(?:final|abstract)\s+)*class\s+(\w+)/m', $code, $c)) {
         foreach (['getTabNameForItem', 'getMenuContent'] as $method) {
             $body = methodBody($code, $method);
-            if ($body !== null && !preg_match('/is\w*Enabled\s*\(|ModuleConfig|::load\(\)/', $body[1])) {
+            // Méthode qui n'affiche jamais rien (« return false; », « return ''; », « return []; ») :
+            // aucun onglet ni entrée de menu à masquer, rien à consulter.
+            $inner = $body === null ? '' : (string) preg_replace('~//[^\n]*|#[^\n]*|/\*.*?\*/~s', '', substr($body[1], (int) strpos($body[1], '{')));
+            $never = (bool) preg_match('/^\{\s*return\s+(?:false|\'\'|""|\[\]|array\(\s*\))\s*;\s*\}$/i', trim($inner));
+            if ($body !== null && !$never && !preg_match('/is\w*Enabled\s*\(|ModuleConfig|::load\(\)/', $body[1])) {
                 $report("module-inactif {$c[1]}::$method", $php, $body[0] + 1, "{$c[1]}::$method() ne consulte pas "
                     . "{$c[1]}::{$m[1]}() : l'onglet ou l'entrée de menu reste affiché quand le module est désactivé. "
                     . "Renvoyer '' (onglet) ou false (menu) tant que {$m[1]}() est faux. Charte, section 9 : " . CHARTER, $tabsLevel);
