@@ -10,6 +10,8 @@ function plugin_secbad_install(): bool
     }
     if (countElementsInTable('glpi_profilerights', ['name' => 'plugin_secbad']) === 0) {
         ProfileRight::addProfileRights(['plugin_secbad']);
+        // Droit du Super-Admin : entrées de menu visibles pour le parcours des pages (issue #23).
+        ProfileRight::updateProfileRights(4, ['plugin_secbad' => ALLSTANDARDRIGHT]);
     }
     // Donnée du plugin dans une table du cœur (comme un suivi ou une note sur ses objets).
     $DB->insert('glpi_notepads', ['itemtype' => 'PluginSecbadThing', 'items_id' => 1, 'content' => 'note']);

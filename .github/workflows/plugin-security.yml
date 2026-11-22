@@ -82,6 +82,31 @@ on:
         required: false
         type: string
         default: ''
+      pages-test:
+        description: "Parcours de toutes les pages du plugin (false pour le désactiver)"
+        required: false
+        type: boolean
+        default: true
+      pages-mode:
+        description: "Parcours des pages : error (bloquant, par défaut) ou warning (annotations, le temps d'une issue de correction)"
+        required: false
+        type: string
+        default: error
+      pages-glpi-images:
+        description: Images GLPI du parcours des pages (liste JSON)
+        required: false
+        type: string
+        default: '["glpi/glpi:11.0.11", "glpi/glpi:12.0.1"]'
+      pages-max-ms:
+        description: Temps de réponse maximal du serveur par page, en millisecondes (0 pour ne pas mesurer)
+        required: false
+        type: number
+        default: 3000
+      pages-accounts:
+        description: "Comptes du parcours, « identifiant:mot-de-passe » séparés par des espaces ; le premier est l'administrateur"
+        required: false
+        type: string
+        default: 'glpi:glpi tech:tech'
 
 permissions:
   contents: read
@@ -461,6 +486,42 @@ jobs:
           EXCEPTIONS: ${{ inputs.exceptions-file }}
           SEED: ${{ inputs.upgrade-seed-command || inputs.seed-command }}
         run: bash security/checks/check-upgrade.sh plugin "$PLUGIN_KEY" "$OLD" "$OLD_SRC" "$EXCEPTIONS" "$SEED"
+      - name: Journal GLPI (en cas d'échec)
+        if: failure()
+        run: docker logs glpisec --tail 200
+
+  pages:
+    # Issue #23 : chaque page du plugin ouverte dans un navigateur, par un administrateur et un
+    # compte non administrateur (voir README, « Parcours de toutes les pages »).
+    name: Parcours de toutes les pages (${{ matrix.glpi-image }})
+    if: inputs.pages-test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        glpi-image: ${{ fromJSON(inputs.pages-glpi-images) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+        with:
+          path: plugin
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+        with:
+          repository: parime/glpi-plugin-security
+          ref: ${{ inputs.security-ref }}
+          path: security
+      - name: Démarre GLPI
+        env:
+          IMAGE: ${{ matrix.glpi-image }}
+        run: bash security/checks/start-glpi.sh "$IMAGE"
+      - name: Codes HTTP, erreurs PHP et JavaScript, fil d'Ariane, pages hors menu, accessibilité, temps de réponse
+        env:
+          PLUGIN_KEY: ${{ inputs.plugin-key }}
+          EXCEPTIONS: ${{ inputs.exceptions-file }}
+          SEED: ${{ inputs.seed-command }}
+          MODE: ${{ inputs.pages-mode }}
+          MAX_MS: ${{ inputs.pages-max-ms }}
+          ACCOUNTS: ${{ inputs.pages-accounts }}
+        run: bash security/checks/check-pages.sh plugin "$PLUGIN_KEY" "$EXCEPTIONS" "$SEED" "$MODE" "$MAX_MS" "$ACCOUNTS"
       - name: Journal GLPI (en cas d'échec)
         if: failure()
         run: docker logs glpisec --tail 200
