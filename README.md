@@ -23,6 +23,8 @@ jobs:
       # Facultatif : jeu de données créé avant la désinstallation, pour que le contrôle des
       # restes porte sur de vraies données (dossier de GLPI, utilisateur www-data).
       # seed-command: php plugins/monplugin/tests/security/setup.php
+      # Test de mise à jour depuis la dernière release (GLPI 11 et 12), actif par défaut :
+      # upgrade-test: false pour le désactiver, upgrade-seed-command pour un autre jeu de données.
 ```
 
 Puis rendre le job « security » obligatoire dans la protection de la branche principale. Un nouveau
@@ -176,6 +178,51 @@ Le plugin est installé dans le GLPI officiel (11.0.11 par défaut), puis :
   de menu propre compté comme une seule entrée (charte, section 9).
   Une entrée justifiée dans un secteur natif (par exemple un objet ITIL placé dans Assistance) se
   déclare par `menus-entree-native <secteur> > <classe> : <justification>` et n'est plus comptée.
+
+### Mise à jour depuis la version publiée (`checks/check-upgrade.sh`, GLPI 11 et 12)
+
+Ce que font tous les utilisateurs : mettre à jour une installation existante. Une installation
+neuve ne le teste pas (une migration qui oublie une colonne passe la CI et casse chaque mise à
+jour). Le job `upgrade`, une fois par image de `upgrade-glpi-images` (GLPI 11.0.11 et 12.0.1 par
+défaut), dans un GLPI jetable :
+
+1. installe le code de la PR à neuf : schéma, tâches automatiques, notifications et droits de
+   référence ; la base est ensuite remise dans son état d'avant le plugin ;
+2. installe et active la **dernière release publiée** (archive de la release GitHub, vérifiée par
+   son `.sha256` s'il est publié ; sur un push d'étiquette, la release précédente) ;
+3. crée le jeu de données de cette version : `upgrade-seed-command`, sinon `seed-command`, sinon
+   `php plugins/<clé>/tests/security/setup.php` de l'**étiquette** publiée (les `tests/`, exclus de
+   l'archive, sont repris des sources de l'étiquette : le jeu de données correspond à son schéma) ;
+4. remplace le plugin par le code de la PR (dossier vidé d'abord) et lance la mise à jour
+   (`plugin:install --force`, puis `plugin:activate`) ;
+5. vérifie :
+   - **aucune erreur PHP ni SQL** : sortie de la mise à jour, `php-errors.log` et `sql-errors.log`
+     (hors entrées écrites par GLPI lui-même : changement de version détecté, message de test) ;
+   - **schéma identique** à l'installation neuve, table par table (`SHOW CREATE TABLE` : colonnes et
+     leur définition, index et clés uniques, moteur et interclassement ; `AUTO_INCREMENT` et ordre
+     des colonnes ignorés). Table absente ou en trop : écart aussi ;
+   - **données conservées** : nombre de lignes de chaque table du plugin au moins égal ;
+   - **tâches automatiques, notifications et droits** : rien de ce qui existait avant n'a disparu,
+     aucun droit donné à un profil n'est retiré, et rien de ce que crée une installation neuve ne
+     manque (une tâche ajoutée à l'installation mais oubliée dans la migration, par exemple). Un
+     état de tâche ou une activation de notification modifié est signalé en avertissement ;
+   - **pages principales servies** (200, sans erreur affichée) pour l'administrateur : accueil,
+     liste des plugins, entrées de menu du plugin et sa page de configuration.
+
+Le job s'adapte, avec un avertissement et sans échec : aucune release publiée (premier plugin),
+release sans archive (sources de l'étiquette utilisées), version publiée qui ne s'installe pas sur
+cette version de GLPI, pas de jeu de données ou jeu de données en échec. `upgrade-test: false` le
+désactive. Un écart justifié se déclare dans le fichier d'exceptions avec l'identifiant affiché :
+`upgrade-schema <table>`, `upgrade-table-missing <table>`, `upgrade-table-extra <table>`,
+`upgrade-data <table>`, `upgrade-crontask <classe>::<nom>`, `upgrade-notification <classe>::<événement>`,
+`upgrade-right <droit>`.
+
+Auto-test : le plugin `tests/fixtures/upgrade` (clé `secup`) en version 1.0.0 (`old`, avec son jeu de
+données) est mis à jour vers une 1.1.0 correcte (`good`, qui doit passer) et vers une 1.1.0
+défectueuse (`bad`) : migration qui oublie une colonne et un index, table reconstruite, tâche,
+notification et droits retirés, avertissement PHP, page refusée. Chaque défaut doit être signalé.
+Lancement local : `bash checks/check-upgrade.sh <code> <clé> <version publiée> <sources> [exceptions] [jeu de données]`,
+la version publiée étant obtenue par `bash checks/fetch-previous-release.sh <owner/dépôt> <clé> <dossier> <checkout>`.
 
 ### Points d'entrée, matrice d'accès et exigences marketplace (`checks/`)
 

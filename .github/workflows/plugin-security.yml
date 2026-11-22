@@ -57,6 +57,21 @@ on:
         required: false
         type: string
         default: tests/security/access-matrix.sh
+      upgrade-test:
+        description: "Test de mise à jour depuis la dernière version publiée (false pour le désactiver)"
+        required: false
+        type: boolean
+        default: true
+      upgrade-glpi-images:
+        description: Images GLPI du test de mise à jour (liste JSON)
+        required: false
+        type: string
+        default: '["glpi/glpi:11.0.11", "glpi/glpi:12.0.1"]'
+      upgrade-seed-command:
+        description: "Jeu de données créé avec la version publiée avant la mise à jour (défaut : seed-command, sinon tests/security/setup.php de l'étiquette)"
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -359,6 +374,51 @@ jobs:
           EXCEPTIONS: ${{ inputs.exceptions-file }}
           SEED: ${{ inputs.seed-command }}
         run: bash security/checks/check-plugin.sh plugin "$PLUGIN_KEY" "$EXCEPTIONS" "$SEED"
+      - name: Journal GLPI (en cas d'échec)
+        if: failure()
+        run: docker logs glpisec --tail 200
+
+  upgrade:
+    # Issue #24 : ce que font tous les utilisateurs, la mise à jour d'une installation existante.
+    # Version publiée installée et remplie, remplacée par le code de la PR, puis comparée à une
+    # installation neuve de ce code (voir README, « Mise à jour depuis la version publiée »).
+    name: Mise à jour depuis la version publiée (${{ matrix.glpi-image }})
+    if: inputs.upgrade-test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        glpi-image: ${{ fromJSON(inputs.upgrade-glpi-images) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+        with:
+          path: plugin
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+        with:
+          repository: parime/glpi-plugin-security
+          ref: ${{ inputs.security-ref }}
+          path: security
+      # Archive de la dernière release GitHub (empreinte .sha256 vérifiée) et sources de son
+      # étiquette (tests/ et jeu de données, exclus de l'archive). API REST seulement.
+      - name: Dernière version publiée du plugin
+        id: previous
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PLUGIN_KEY: ${{ inputs.plugin-key }}
+        run: bash security/checks/fetch-previous-release.sh "$REPO" "$PLUGIN_KEY" "$RUNNER_TEMP/previous" plugin
+      - name: Démarre GLPI
+        env:
+          IMAGE: ${{ matrix.glpi-image }}
+        run: bash security/checks/start-glpi.sh "$IMAGE"
+      - name: Mise à jour vers le code de la PR et comparaison à une installation neuve
+        env:
+          PLUGIN_KEY: ${{ inputs.plugin-key }}
+          OLD: ${{ steps.previous.outputs.old }}
+          OLD_SRC: ${{ steps.previous.outputs.old-src }}
+          EXCEPTIONS: ${{ inputs.exceptions-file }}
+          SEED: ${{ inputs.upgrade-seed-command || inputs.seed-command }}
+        run: bash security/checks/check-upgrade.sh plugin "$PLUGIN_KEY" "$OLD" "$OLD_SRC" "$EXCEPTIONS" "$SEED"
       - name: Journal GLPI (en cas d'échec)
         if: failure()
         run: docker logs glpisec --tail 200
