@@ -205,6 +205,15 @@ jobs:
           php checks/check-navigation.php "$d"
       - name: secgood doit passer
         run: php checks/check-navigation.php tests/fixtures/secgood
+      # secgood/inc/framework.class.php : getMenuContent() renvoie toujours false, rien à masquer ;
+      # dès qu'il renvoie une entrée sans consulter isFrameworkEnabled(), l'écart revient.
+      - name: menu jamais affiché accepté, menu affiché sans consulter l'activation refusé
+        run: |
+          d=$(mktemp -d); cp -r tests/fixtures/secgood/. "$d"
+          sed -i 's/return false;/return ["title" => "x"];/' "$d/inc/framework.class.php"
+          out=$(php checks/check-navigation.php "$d") && { echo "$out"; echo "::error::module-inactif non signalé"; exit 1; }
+          grep -qF "[module-inactif PluginSecgoodFramework::getMenuContent]" <<< "$out" \
+            || { echo "$out"; echo "::error::écart module-inactif attendu"; exit 1; }
 
   archive:
     name: Contrôle de l'archive (sans export-ignore échoue, avec passe)

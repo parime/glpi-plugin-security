@@ -3,6 +3,14 @@
 Les versions antérieures à v1.11.0 sont décrites dans les
 [publications GitHub](https://github.com/parime/glpi-plugin-security/releases) du dépôt.
 
+## v1.11.1
+
+### Corrigé
+- Ergonomie, écart `module-inactif` (depuis v1.10.3) : un `getTabNameForItem()` ou un
+  `getMenuContent()` qui ne renvoie jamais rien (`return false;`, `return '';`, `return [];`) n'a
+  rien à masquer quand le module est désactivé ; il n'est plus signalé (faux positifs constatés sur
+  GRC, registres de référentiels sans entrée de menu). Cas ajouté à secgood et à l'auto-test.
+
 ## v1.11.0
 
 ### Ajouté
