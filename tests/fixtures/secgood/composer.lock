@@ -1,0 +1,12 @@
+{
+    "_readme": ["Fixture : dépendance sans vulnérabilité connue (auto-test de glpi-plugin-security)"],
+    "content-hash": "00000000000000000000000000000000",
+    "packages": [
+        {
+            "name": "psr/log",
+            "version": "3.0.2",
+            "type": "library"
+        }
+    ],
+    "packages-dev": []
+}

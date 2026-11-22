@@ -241,3 +241,89 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
       - run: shellcheck checks/*.sh
+
+  analyses:
+    name: Gitleaks, Trivy et langages CodeQL (secbad échoue, secgood passe)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+      - name: exception sans raison refusée
+        run: |
+          printf 'gitleaks a.php:generic-api-key:1\n' > "$RUNNER_TEMP/sans-raison"
+          if bash checks/security-exceptions.sh "$RUNNER_TEMP/sans-raison" gitleaks; then
+            echo "::error::une exception sans raison doit être refusée"; exit 1
+          fi
+      - name: Gitleaks, secbad doit échouer
+        run: |
+          if bash checks/check-secrets.sh tests/fixtures/secbad; then
+            echo "::error::Gitleaks ne trouve plus la clé de secbad/config/secbad.ini"; exit 1
+          fi
+      - name: Gitleaks, secbad passe avec l'exception justifiée
+        run: |
+          printf 'gitleaks config/secbad.ini:generic-api-key:4 : clé factice de la fixture\n' > "$RUNNER_TEMP/exceptions"
+          bash checks/check-secrets.sh tests/fixtures/secbad "$RUNNER_TEMP/exceptions"
+      - name: Gitleaks, secgood doit passer
+        run: bash checks/check-secrets.sh tests/fixtures/secgood
+      - name: Trivy, secbad doit échouer
+        run: |
+          d=$(mktemp -d); cp -r tests/fixtures/secbad/. "$d"
+          cp "$d/deps/composer.lock.fixture" "$d/deps/composer.lock"
+          cp "$d/deps/package-lock.json.fixture" "$d/deps/package-lock.json"
+          out=$(bash checks/check-dependencies.sh "$d" 2>&1) && {
+            echo "$out"; echo "::error::Trivy ne trouve plus les dépendances vulnérables de secbad"; exit 1; }
+          echo "$out"
+          for lib in guzzlehttp/guzzle lodash; do
+            grep -q "$lib" <<< "$out" || { echo "::error::Trivy ne signale plus $lib"; exit 1; }
+          done
+      - name: Trivy, secgood doit passer
+        run: bash checks/check-dependencies.sh tests/fixtures/secgood
+      - name: langages CodeQL détectés
+        run: |
+          for f in secbad secgood; do
+            got=$(bash checks/codeql-languages.sh "tests/fixtures/$f")
+            [ "$got" = '["actions","javascript"]' ] || { echo "::error::$f : langages $got"; exit 1; }
+          done
+          d=$(mktemp -d); git -C "$d" init -q; touch "$d/a.php"; git -C "$d" add -A
+          got=$(bash checks/codeql-languages.sh "$d")
+          [ "$got" = '[]' ] || { echo "::error::plugin PHP seul : langages $got"; exit 1; }
+
+  codeql:
+    name: CodeQL (${{ matrix.fixture }} ${{ matrix.expect }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - fixture: secbad
+            languages: javascript
+            expect: échoue
+          - fixture: secgood
+            languages: actions,javascript
+            expect: passe
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+      - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3 (SHA pinned)
+        with:
+          languages: ${{ matrix.languages }}
+          build-mode: none
+          source-root: tests/fixtures/${{ matrix.fixture }}
+      - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3 (SHA pinned)
+        with:
+          category: /fixture:${{ matrix.fixture }}
+          upload: never
+          output: ${{ runner.temp }}/codeql
+      - name: secgood passe
+        if: matrix.fixture == 'secgood'
+        run: bash checks/check-codeql-sarif.sh "$RUNNER_TEMP/codeql"
+      - name: secbad échoue, puis passe avec ses résultats justifiés
+        if: matrix.fixture == 'secbad'
+        run: |
+          if bash checks/check-codeql-sarif.sh "$RUNNER_TEMP/codeql"; then
+            echo "::error::CodeQL ne trouve plus la XSS de secbad/public/js/thing.js"; exit 1
+          fi
+          jq -r '.runs[].results[] | "codeql \(.ruleId) \(.locations[0].physicalLocation.artifactLocation.uri) : test"' \
+            "$RUNNER_TEMP"/codeql/*.sarif > "$RUNNER_TEMP/exceptions"
+          cat "$RUNNER_TEMP/exceptions"
+          grep -q "public/js/thing.js" "$RUNNER_TEMP/exceptions" \
+            || { echo "::error::le résultat attendu porte sur public/js/thing.js"; exit 1; }
+          bash checks/check-codeql-sarif.sh "$RUNNER_TEMP/codeql" "$RUNNER_TEMP/exceptions"
