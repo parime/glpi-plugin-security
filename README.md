@@ -129,10 +129,10 @@ l'issue, la PR qui la ferme retire la ligne : le contrôle redevient bloquant (`
 
 | Plugin | Issue de navigation | Écarts |
 |---|---|---|
-| GRC Manager (dev) | glpi-iso27001-management#1035 | 16 : en-tête de la configuration et de `riskscale.php` dans Outils, 3 boutons « … now », 11 liens vers des registres |
+| GRC Manager (dev) | glpi-iso27001-management#1035 | 15 : en-tête de la configuration et de `riskscale.php` dans Outils, 3 boutons « … now », 10 liens vers des registres |
 | Configuration GLPI Auto | Configuration-glpi-auto#495 | 5 : entrée dans Configuration, page de configuration = assistant (liens, tableau d'audit, envoi) |
 | AssetSign | assetsign-glpi#392 | 3 liens « Voir les… » de la configuration |
-| Inventaire Docker | glpi-docker-inventory#118 | 14 : 7 lectures « … maintenant », 7 liens vers les écrans d'usage |
+| Inventaire Docker | glpi-docker-inventory#118 | 13 : 7 lectures « … maintenant », 6 liens vers les écrans d'usage |
 | FinOps (dev) | glpi-finops#37 | 2 liens (coûts, inventaire Sangfor) |
 
 Lancement local, depuis le dossier du plugin : `php <glpi-plugin-security>/checks/check-navigation.php . [error|warning]`
