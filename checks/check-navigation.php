@@ -461,12 +461,17 @@ foreach (files(['php'], 'front') as $front) {
     for ($i = 0, $n = count($t); $i < $n; $i++) {
         $name = strtolower($t[$i][1]);
         $prev = $t[$i - 1][0] ?? 0;
-        $call = ($t[$i + 1][1] ?? '') === '(';
-        if (!$call) {
-            if (in_array($t[$i][0], [T_INCLUDE, T_INCLUDE_ONCE, T_REQUIRE, T_REQUIRE_ONCE], true)
-                && preg_match('#[\'"]/front/[\w.]+\.php[\'"]#', text($rhs($i)) ?: '')) {
+        if (in_array($t[$i][0], [T_INCLUDE, T_INCLUDE_ONCE, T_REQUIRE, T_REQUIRE_ONCE], true)) {
+            $target = '';
+            for ($j = $i + 1; $j < $n && $t[$j][1] !== ';'; $j++) {
+                $target .= $t[$j][1];
+            }
+            if (preg_match('#[\'"]/front/[\w.]+\.php[\'"]#', $target)) {
                 $info['other'] = true; // page du cœur incluse (dropdown.common.php...) : en-tête fourni
             }
+            continue;
+        }
+        if (($t[$i + 1][1] ?? '') !== '(') {
             continue;
         }
         if ($prev === T_DOUBLE_COLON) {
