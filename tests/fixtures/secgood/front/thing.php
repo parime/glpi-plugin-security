@@ -7,4 +7,7 @@
 
 Session::checkRight('config', READ);
 
+// En-tête rangé dans l'entrée de menu du plugin (Outils), pour le fil d'Ariane (issue #22).
+Html::header('Thing', '', 'tools', PluginSecgoodThing::class);
 Glpi\Application\View\TemplateRenderer::getInstance()->display('@secgood/thing.html.twig');
+Html::footer();

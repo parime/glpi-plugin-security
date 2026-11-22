@@ -87,6 +87,56 @@ modèle, sans PHPUnit.
 
 Lancement local, depuis le dossier du plugin : `php <glpi-plugin-security>/checks/check-subtle-colors.php .`
 
+### Ergonomie : réglages, menus, fil d'Ariane (`checks/check-navigation.php`)
+
+Règle « Où placer un écran » (charte, section 9) : les réglages dans la page de configuration du
+plugin (Configuration > Plugins, en onglets), l'exploitation dans le menu GLPI où un utilisateur la
+cherche (Parc, Assistance, Gestion, Outils ou le menu propre du plugin), et rien de l'exploitation
+dans le paramétrage. Contrôle statique (sans GLPI), job `navigation` du workflow. Chaque écart
+indique le fichier, la ligne, le problème, l'emplacement attendu, et son identifiant entre crochets :
+
+| Identifiant | Écart |
+|---|---|
+| `config-action <fichier>` | Bouton « … maintenant » (récupérer, envoyer, importer, mettre à jour, télécharger, lire, synchroniser ; français ou anglais) dans la page de configuration. « Tester la connexion » reste un réglage |
+| `config-tableau <fichier>` | Tableau de résultats ou de registre : `<table>` qui parcourt des résultats, journaux, imports, alertes, rapports…, ou `components/datatable.html.twig` |
+| `config-lien <fichier> > <cible>` | Lien vers une page `front/` d'exploitation : adresse écrite, `getSearchURL()`, `getFormURL()`, `get…URL()`, `Menu::url('<page>')` d'une classe du plugin. Ne comptent pas : classes dont le nom contient `Config`, intitulés (`CommonDropdown`), classes du cœur (droits, notifications), pages rangées dans Configuration hors entrée de menu, traitements de formulaire sans affichage |
+| `menus-secteur <secteur>` | Plus d'une entrée `menu_toadd` dans un même secteur GLPI |
+| `menus-entree-native config > <classe>` | Entrée de menu dans le secteur Configuration : les réglages passent par `config_page` |
+| `page-entete <front/page.php>` | Page qui affiche un écran GLPI (`Html::footer()`, `->display()`, `Search::show()`…) sans `Html::header()` ni en-tête équivalent. Ne comptent pas : téléchargements et pages autonomes (`header('Content-Type: …')`), pages du cœur incluses |
+| `entete-secteur <front/page.php>` | `Html::header(…, <secteur>, <classe>)` incohérent avec le menu : secteur où le plugin n'a pas d'entrée (hors `config`), ou classe d'une entrée de menu déclarée dans un autre secteur (fil d'Ariane et menu actif faux) |
+
+Fichiers lus pour la page de configuration : le fichier du hook `config_page`, les pages `front/`
+rangées dans Configuration > Plugins (`Html::header(…, 'config', 'plugin')` ou `Plugin::class`), les
+templates qu'elles affichent et incluent, les classes du plugin dont le nom contient `Config`, les
+objets qu'une sous-page de réglages crée (`new Connection()`) et le corps des méthodes `config*()`
+appelées (`EndOfLife::configData()`). Les exceptions de menu sont celles du contrôle dans un vrai
+GLPI : `menus-secteur-metier` (le secteur propre d'un outil métier complet compte pour une entrée)
+et `menus-entree-native <secteur> > <classe>` (entrée justifiée, non comptée). Tout autre écart
+justifié : ligne `<identifiant> : <raison>` dans `.glpi-security-exceptions`.
+
+**Mode avertissement, le temps de l'issue de navigation.** Un plugin qui a des écarts connus, listés
+dans son issue de navigation ouverte, passe le contrôle en avertissement dans son `security.yml` :
+
+```yaml
+    with:
+      plugin-key: monplugin
+      navigation-mode: warning   # jusqu'à la fermeture de parime/monplugin#NN (navigation)
+```
+
+Les écarts deviennent des annotations `::warning::` et le job ne bloque pas. À la fermeture de
+l'issue, la PR qui la ferme retire la ligne : le contrôle redevient bloquant (`error`, par défaut).
+Écarts relevés à la création du contrôle, sur les branches principales :
+
+| Plugin | Issue de navigation | Écarts |
+|---|---|---|
+| GRC Manager (dev) | glpi-iso27001-management#1035 | 16 : en-tête de la configuration et de `riskscale.php` dans Outils, 3 boutons « … now », 11 liens vers des registres |
+| Configuration GLPI Auto | Configuration-glpi-auto#495 | 5 : entrée dans Configuration, page de configuration = assistant (liens, tableau d'audit, envoi) |
+| AssetSign | assetsign-glpi#392 | 3 liens « Voir les… » de la configuration |
+| Inventaire Docker | glpi-docker-inventory#118 | 14 : 7 lectures « … maintenant », 7 liens vers les écrans d'usage |
+| FinOps (dev) | glpi-finops#37 | 2 liens (coûts, inventaire Sangfor) |
+
+Lancement local, depuis le dossier du plugin : `php <glpi-plugin-security>/checks/check-navigation.php . [error|warning]`
+
 ### Archive publiée (`checks/check-archive.sh`)
 
 L'archive de release est construite avec `git archive` : elle ne doit contenir aucun fichier de

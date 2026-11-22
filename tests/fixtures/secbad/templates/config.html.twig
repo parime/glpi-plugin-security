@@ -1,0 +1,11 @@
+{# SPDX-License-Identifier: GPL-3.0-or-later #}
+{# Défauts volontaires d'ergonomie (issue #22) : exploitation dans la page de configuration. #}
+<form method="post" action="config.php">
+  <button type="submit" name="fetch" class="btn btn-primary">{{ __('Récupérer maintenant', 'secbad') }}</button>
+</form>
+<table class="table">
+  {% for result in results %}
+    <tr><td>{{ result.name }}</td><td>{{ result.status }}</td></tr>
+  {% endfor %}
+</table>
+<a href="{{ path('/plugins/secbad/front/report.php') }}">{{ __('Voir les résultats', 'secbad') }}</a>
