@@ -74,6 +74,8 @@ function normalizeCreateTable(string $create): array
 
 function snapshot(string $key, string $out): int
 {
+    // $kernel global, comme dans un script de GLPI : isAPI() et d'autres fonctions le lisent.
+    global $kernel;
     require '/var/www/glpi/vendor/autoload.php';
     $kernel = new \Glpi\Kernel\Kernel();
     $kernel->boot();

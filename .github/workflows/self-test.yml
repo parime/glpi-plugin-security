@@ -65,6 +65,46 @@ jobs:
             echo "::error::le contrôle des menus bloque pour une seule entrée"; exit 1
           fi
 
+  upgrade:
+    name: Test de mise à jour (secup défectueux échoue, correct passe, ${{ matrix.glpi-image }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        glpi-image: ["glpi/glpi:11.0.11", "glpi/glpi:12.0.1"]
+    env:
+      F: tests/fixtures/upgrade
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+      - name: Démarre GLPI
+        env:
+          IMAGE: ${{ matrix.glpi-image }}
+        run: bash checks/start-glpi.sh "$IMAGE"
+      # 1.0.0 (old) mise à jour en 1.1.0 défectueuse (bad) : migration qui oublie une colonne et un
+      # index, table reconstruite (données perdues), tâche, notification et droits retirés,
+      # avertissement PHP ; la page principale n'est plus servie.
+      - name: version défectueuse, doit échouer à chaque contrôle
+        run: |
+          out=$(bash checks/check-upgrade.sh "$F/bad" secup "$F/old" "$F/old" || true)
+          echo "$out"
+          grep -q "RESULT errors=1 schema=1 data=1 objects=1 pages=1" <<< "$out"             || { echo "::error::un contrôle de mise à jour ne détecte plus le défaut de la version défectueuse"; exit 1; }
+          for id in "upgrade-schema glpi_plugin_secup_things : .*colonne \`comment\` absente"                     "upgrade-data glpi_plugin_secup_logs" "upgrade-crontask PluginSecupThing::cleanup"                     "upgrade-notification PluginSecupThing::new" "upgrade-right plugin_secup"                     "page /plugins/secup/front/thing.php" "php-errors.log"; do
+            grep -q "::error::$id" <<< "$out" || { echo "::error::défaut non signalé : $id"; exit 1; }
+          done
+      - name: version correcte, doit passer (ordre des colonnes et AUTO_INCREMENT ignorés)
+        run: |
+          out=$(bash checks/check-upgrade.sh "$F/good" secup "$F/old" "$F/old") || { echo "$out"; exit 1; }
+          echo "$out"
+          grep -q "6 ligne(s) du plugin avant mise à jour" <<< "$out"             || { echo "::error::le jeu de données de la version publiée n'a pas été créé"; exit 1; }
+      - name: sans version publiée, avertissement sans échec
+        run: |
+          out=$(bash checks/check-upgrade.sh "$F/good" secup "" "") || { echo "$out"; exit 1; }
+          echo "$out"
+          grep -q "::warning::aucune version publiée" <<< "$out"             || { echo "::error::l'absence de version publiée doit être signalée"; exit 1; }
+      - name: Journal GLPI (en cas d'échec)
+        if: failure()
+        run: docker logs glpisec --tail 200
+
   translations:
     name: Contrôle des traductions (secbad échoue, secgood passe)
     runs-on: ubuntu-latest

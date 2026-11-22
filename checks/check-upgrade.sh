@@ -48,9 +48,7 @@ restore() {
   docker exec -u root "$C" rm -rf "$P" "/var/glpi/files/_plugins/$KEY"
   console cache:clear -n >/dev/null 2>&1 || true
 }
-# GLPI rendu dans son état de départ à la fin : un autre contrôle peut suivre dans le même conteneur.
-finish() { restore; rm -rf "$W"; }
-skip() { echo "::warning::$1"; echo "RESULT errors=0 schema=0 data=0 objects=0 pages=0 (mise à jour non testée)"; finish; exit 0; }
+skip() { echo "::warning::$1"; echo "RESULT errors=0 schema=0 data=0 objects=0 pages=0 (mise à jour non testée)"; exit 0; }
 
 docker cp "$HERE/glpi-upgrade-checks.php" "$C":/tmp/glpi-upgrade-checks.php
 EXC=""
@@ -60,6 +58,9 @@ if [ -n "$EXCEPTIONS" ] && [ -f "$DIR/$EXCEPTIONS" ]; then
 fi
 docker exec "$DB" sh -c 'mariadb-dump -uroot -pglpi --single-transaction glpidb > /tmp/glpi-base.sql' \
   || { echo "::error::sauvegarde de la base impossible"; exit 1; }
+# GLPI rendu dans son état de départ en sortant, même en échec : un autre contrôle peut suivre dans
+# le même conteneur.
+trap 'restore; rm -rf "$W"' EXIT
 
 echo "== Installation neuve du code de la PR (référence)"
 deploy "$DIR" || exit 1
@@ -131,14 +132,18 @@ for url in "${URLS[@]}"; do
 done
 
 echo "== Journaux PHP et SQL de GLPI"
+# Entrées attendues, écrites par GLPI lui-même : changement de version détecté (plugin désactivé le
+# temps de la mise à jour) et message de test du journal (page d'état du système).
+export BENIGN='version changed[.] It has been deactivated as its update process has to be launched|[*][*][*] Test logger$'
 for log in php-errors sql-errors; do
-  if docker exec "$C" test -s "$LOGS/$log.log"; then
-    echo "::error::$log.log non vide après la mise à jour et les pages :"
-    docker exec "$C" head -40 "$LOGS/$log.log"
+  docker exec "$C" cat "$LOGS/$log.log" > "$W/$log.log" 2>/dev/null || true
+  awk '/^\[[0-9][0-9][0-9][0-9]-/ { keep = ($0 !~ ENVIRON["BENIGN"]) } keep' "$W/$log.log" > "$W/$log.kept"
+  if [ -s "$W/$log.kept" ]; then
+    echo "::error::$log.log : erreurs pendant la mise à jour ou l'affichage des pages :"
+    head -40 "$W/$log.kept"
     ERR=1
   fi
 done
 
-finish
 echo "RESULT errors=$ERR schema=$SCHEMA data=$DATA objects=$OBJECTS pages=$PAGES"
 [ "$ERR$SCHEMA$DATA$OBJECTS$PAGES" = "00000" ]

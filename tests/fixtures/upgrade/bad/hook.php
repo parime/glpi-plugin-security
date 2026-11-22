@@ -16,11 +16,7 @@ function plugin_secup_install(): bool
         CronTask::unregister('secup');
         (new Notification())->deleteByCriteria(['itemtype' => PluginSecupThing::class]);
         ProfileRight::deleteProfileRights(['plugin_secup']);
-        try {
-            $DB->doQuery('SELECT missing_column FROM glpi_plugin_secup_things');
-        } catch (\Throwable $e) {
-            // Défaut : erreur SQL avalée.
-        }
+        // Défaut : avertissement PHP pendant la mise à jour.
         trigger_error('secup : avertissement pendant la mise à jour', E_USER_WARNING);
         $DB->doQuery('CREATE TABLE glpi_plugin_secup_logs (id int unsigned NOT NULL AUTO_INCREMENT PRIMARY KEY, message text) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
         ProfileRight::addProfileRights(['plugin_secup']);
