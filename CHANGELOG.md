@@ -22,7 +22,8 @@ Les versions antérieures à v1.11.0 sont décrites dans les
 ### Modifié
 - Contrôle de l'archive : `.glpi-security-exceptions.d/` est un fichier de développement, à exclure
   avec `export-ignore` comme le fichier racine.
-- Auto-test : exécutions dépassées d'une PR annulées ; cas de `heavy-changes.sh` (documentation
+- Auto-test : une seule exécution par commit de PR (push limité à main et aux étiquettes),
+  exécutions dépassées d'une PR annulées ; cas de `heavy-changes.sh` (documentation
   seule, code, fichier déplacé, push, entrée absente) et des fragments d'exceptions.
 
 ### Corrigé
