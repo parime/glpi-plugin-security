@@ -159,7 +159,7 @@ jobs:
       # secbad : deux entrées dans Outils, une dans Configuration, page de configuration rangée dans
       # Assistance, page sans en-tête, bouton « Récupérer maintenant », tableau de résultats et lien
       # vers une page d'usage dans la configuration ; secgood : la version correcte.
-      - name: secbad doit échouer sur les sept écarts
+      - name: secbad doit échouer sur les dix écarts
         run: |
           out=$(php checks/check-navigation.php tests/fixtures/secbad) \
             && { echo "$out"; echo "::error::le contrôle d'ergonomie ne détecte plus les écarts de secbad"; exit 1; }
@@ -167,16 +167,25 @@ jobs:
           for expected in "[menus-secteur tools]" "[menus-entree-native config > PluginSecbadThing]" \
                           "[entete-secteur front/config.php]" "[page-entete front/report.php]" \
                           "[config-action templates/config.html.twig]" "[config-tableau templates/config.html.twig]" \
-                          "[config-lien templates/config.html.twig > front/report.php]"; do
+                          "[config-lien templates/config.html.twig > front/report.php]" \
+                          "[rubrique-onglets PluginSecbadMenu::sections() PluginSecbadThing::class]" \
+                          "[module-inactif PluginSecbadReport::getTabNameForItem]" "[config-version front/config.php]"; do
             grep -qF "$expected" <<< "$out" || { echo "::error::écart non signalé : $expected"; exit 1; }
           done
-          [ "$(grep -c '^::error' <<< "$out")" = 7 ] || { echo "::error::nombre d'écarts de secbad inattendu"; exit 1; }
+          [ "$(grep -c '^::error' <<< "$out")" = 10 ] || { echo "::error::nombre d'écarts de secbad inattendu"; exit 1; }
       - name: secbad n'échoue pas en mode avertissement, mais avertit
         run: |
-          out=$(php checks/check-navigation.php tests/fixtures/secbad warning) \
+          out=$(php checks/check-navigation.php tests/fixtures/secbad warning warning) \
             || { echo "$out"; echo "::error::le mode avertissement ne doit pas échouer"; exit 1; }
           echo "$out"
-          [ "$(grep -c '^::warning' <<< "$out")" = 7 ] || { echo "::error::le mode avertissement n'annote plus les écarts"; exit 1; }
+          [ "$(grep -c '^::warning' <<< "$out")" = 10 ] || { echo "::error::le mode avertissement n'annote plus les écarts"; exit 1; }
+      - name: tabs-mode warning ne met en avertissement que les rubriques, modules et encadré de version
+        run: |
+          out=$(php checks/check-navigation.php tests/fixtures/secbad error warning) \
+            && { echo "$out"; echo "::error::les autres écarts doivent rester bloquants"; exit 1; }
+          echo "$out"
+          [ "$(grep -c '^::warning' <<< "$out")" = 3 ] && [ "$(grep -c '^::error' <<< "$out")" = 7 ] \
+            || { echo "::error::répartition inattendue entre navigation-mode et tabs-mode"; exit 1; }
       - name: secbad passe quand chaque écart est une exception justifiée
         run: |
           d=$(mktemp -d); cp -r tests/fixtures/secbad/. "$d"
@@ -438,16 +447,22 @@ jobs:
         run: bash checks/start-glpi.sh "$IMAGE"
       # secbad : page en 500 (crash.php), écran hors menu avec une image sans texte de remplacement
       # (hidden.php), page de configuration rangée dans Assistance (fil d'Ariane faux).
+      # Issue #34 : barre de 9 onglets sans rôles ARIA, sur plusieurs lignes, inatteignable au clavier,
+      # avec un onglet refusé au technicien et un onglet vers un module désactivé (tabs.php).
       - name: secbad doit échouer sur chaque défaut
         run: |
           out=$(bash checks/check-pages.sh tests/fixtures/secbad secbad) && { echo "$out"; echo "::error::le parcours ne bloque plus secbad"; exit 1; }
           echo "$out"
-          for id in "crawl http-500 front/crash.php" "crawl orphan front/hidden.php" "crawl ariane front/config.php"                     "crawl axe:image-alt front/hidden.php" "crawl php-errors"; do
+          for id in "crawl http-500 front/crash.php" "crawl orphan front/hidden.php" "crawl ariane front/config.php"                     "crawl axe:image-alt front/hidden.php" "crawl php-errors" \
+                    "crawl onglets-nombre front/tabs.php" "crawl onglets-lignes front/tabs.php" \
+                    "crawl onglets-role front/tabs.php" "crawl onglets-clavier front/tabs.php" \
+                    "crawl onglet-refuse front/tabs.php" "crawl onglet-inactif front/tabs.php"; do
             grep -q "^::error::$id" <<< "$out" || { echo "::error::défaut non signalé : $id"; exit 1; }
           done
       - name: secbad n'échoue pas en mode avertissement, mais avertit
         run: |
-          out=$(bash checks/check-pages.sh tests/fixtures/secbad secbad "" "" warning) || { echo "$out"; echo "::error::le mode avertissement bloque"; exit 1; }
+          out=$(bash checks/check-pages.sh tests/fixtures/secbad secbad "" "" warning "" "" warning) || { echo "$out"; echo "::error::le mode avertissement bloque"; exit 1; }
+          grep -q "^::warning::crawl onglets-nombre front/tabs.php" <<< "$out" || { echo "$out"; echo "::error::tabs-mode warning n'annote plus les barres d'onglets"; exit 1; }
           grep -q "^::warning::crawl orphan front/hidden.php" <<< "$out" || { echo "$out"; echo "::error::le mode avertissement n'annote plus"; exit 1; }
       - name: secgood doit passer
         run: |
@@ -465,5 +480,5 @@ jobs:
         run: |
           f=.github/workflows/plugin-security.yml; ko=0
           for j in semgrep translations typography colors navigation archive workflows charter entrypoints secrets dependencies codeql-languages codeql dependency-review runtime translated-assertions integration-language upgrade pages; do grep -q "^  $j:$" "$f" || { echo "::error::job « $j » absent de $f"; ko=1; }; done
-          for i in navigation-mode pages-mode upgrade-test integration-languages translated-assertions-mode security-ref; do grep -q "^      $i:$" "$f" || { echo "::error::entrée « $i » absente de $f"; ko=1; }; done
+          for i in navigation-mode tabs-mode pages-mode upgrade-test integration-languages translated-assertions-mode security-ref; do grep -q "^      $i:$" "$f" || { echo "::error::entrée « $i » absente de $f"; ko=1; }; done
           exit $ko

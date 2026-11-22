@@ -21,6 +21,15 @@ les sous-pages trouvées en chemin (liens vers le plugin). Anomalies, avec leur 
                AA) dans le contenu de la page, hors violations déjà présentes sur les pages du cœur
   perf         temps de réponse du serveur au-delà du seuil (--max-ms)
 
+Barres d'onglets des écrans du plugin (issue #34, mode propre --tabs-mode) : barres de liens ou
+d'onglets (role=tablist, .nav-tabs, .nav-pills) du contenu, hors onglets des fiches du cœur :
+  onglets-nombre  plus de 7 onglets visibles dans une barre
+  onglets-lignes  barre sur plusieurs lignes à 1280 px de large
+  onglets-role    barre sans role=tablist, ou onglet sans role=tab
+  onglets-clavier onglet suivant inatteignable au clavier (Tab ou flèche droite)
+  onglet-refuse   onglet vers une page refusée (403) au compte qui le voit
+  onglet-inactif  onglet vers une page qui annonce un module, une fonction ou un référentiel désactivé
+
 Une page s'identifie par son chemin depuis le dossier du plugin (front/x.php), ou depuis la racine
 de GLPI pour un objet du cœur (front/computer.form.php), sans sa requête. Exceptions justifiées,
 dans le fichier d'exceptions : « crawl <identifiant> <page> : raison » (motifs * et ? acceptés).
@@ -28,7 +37,7 @@ dans le fichier d'exceptions : « crawl <identifiant> <page> : raison » (motifs
 Usage :
   python3 crawl-pages.py <url GLPI> --data <fichier JSON de crawl-data.php> --axe <axe.min.js>
                          [--account identifiant:mot-de-passe]... [--exceptions <fichier>]
-                         [--max-ms 3000] [--mode error|warning]
+                         [--max-ms 3000] [--mode error|warning] [--tabs-mode error|warning]
 Sortie : les anomalies (::error:: ou ::warning::), les pages les plus lentes, puis
 « RESULT crawl pages=<n> anomalies=<n> » ; code 1 s'il reste une anomalie en mode error.
 """
@@ -58,6 +67,39 @@ AXE_CORE = re.compile(r'^#header-friendlyname$|^\.status$|#comment_link_|\.btn-o
 AXE_OPTIONS = {'runOnly': {'type': 'tag', 'values': ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']},
                'resultTypes': ['violations']}
 MAX_PAGES = 1500
+MAX_TABS = 7
+TABS_WIDTH = 1280
+# Page d'un module désactivé : message de GLPI ou du plugin (français et anglais).
+DISABLED = re.compile(r"(module|fonction(nalité)?|référentiel|feature|framework|connect(eur|or))[^.\n]{0,60}?"
+                      r"(désactivé|desactive|inactif|disabled|not enabled|n'est pas activé)", re.I)
+# Barres d'onglets du contenu, hors onglets des fiches (CommonGLPI : data-glpi-ajax-content).
+BARS = '''const root = document.querySelector("main#page") || document.body;
+  const sel = '[role="tablist"], ul.nav-tabs, ul.nav-pills, div.nav-tabs, div.nav-pills';
+  const itemSel = 'a.nav-link, button.nav-link, [role="tab"]';
+  const bars = [...new Set(root.querySelectorAll(sel))]
+    .filter(b => !(b.parentElement && b.parentElement.closest(sel)))
+    .map(b => [b, [...new Set(b.querySelectorAll(itemSel))]])
+    .filter(([b, it]) => it.length >= 2 && !it.some(e => e.hasAttribute('data-glpi-ajax-content')))
+    .map(([b, it]) => [b, it.filter(e => { const r = e.getBoundingClientRect();
+      return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== 'hidden'; })]);'''
+TAB_BARS_JS = '''() => { %s
+  return bars.map(([bar, visible]) => ({
+    role: bar.getAttribute('role') || '',
+    label: (bar.getAttribute('aria-label') || visible.map(e => e.innerText.trim()).slice(0, 3).join(' | ')).slice(0, 80),
+    count: visible.length,
+    rows: new Set(visible.map(e => Math.round(e.getBoundingClientRect().top))).size,
+    noTabRole: visible.filter(e => e.getAttribute('role') !== 'tab').length,
+    hrefs: visible.map(e => e.getAttribute('href') || ''),
+  }));
+}''' % BARS
+# Le premier onglet visible reçoit le focus ; Tab ou flèche droite doit le passer à un autre onglet.
+TAB_FOCUS_JS = '''(index) => { %s
+  const bar = bars[index];
+  if (!bar || bar[1].length < 2) return false;
+  window.__tabItems = bar[1];
+  bar[1][0].focus();
+  return document.activeElement === bar[1][0];
+}''' % BARS
 
 
 def norm(text):
@@ -214,6 +256,69 @@ class Crawler:
             if st >= 500 or st == 404 or (admin and st == 403) or e:
                 bad.append(('tab', tid, 'code %d%s' % (st, ' : ' + e.group(0) if e else '')))
 
+    def check_tab_bars(self, pg, pid, admin, bad, tablinks):
+        # Barres d'onglets d'un écran du plugin : nombre, une ligne à 1280 px, rôles, clavier.
+        try:
+            pg.set_viewport_size({'width': TABS_WIDTH, 'height': 1000})
+            pg.wait_for_timeout(100)
+            bars = pg.evaluate(TAB_BARS_JS)
+        except Exception:
+            bars = []
+        for index, bar in enumerate(bars):
+            label = bar['label']
+            if bar['count'] > MAX_TABS:
+                bad.append(('onglets-nombre', pid, '%d onglets visibles dans la barre « %s » (au plus %d : regrouper '
+                            'les écrans, ou les ranger en onglets des fiches)' % (bar['count'], label, MAX_TABS)))
+            if bar['rows'] > 1:
+                bad.append(('onglets-lignes', pid, 'barre « %s » sur %d lignes à %d px de large (une seule ligne '
+                            'attendue)' % (label, bar['rows'], TABS_WIDTH)))
+            if bar['role'] != 'tablist' or bar['noTabRole']:
+                detail = ('role de la barre : « %s »' % bar['role'] if bar['role'] != 'tablist'
+                          else '%d onglet(s) sans role=tab' % bar['noTabRole'])
+                bad.append(('onglets-role', pid, 'barre « %s » : role=tablist sur la barre et role=tab sur chaque '
+                            'onglet attendus (%s)' % (label, detail)))
+            if admin:
+                try:
+                    moved = False
+                    if pg.evaluate(TAB_FOCUS_JS, index):
+                        for key in ('Tab', 'ArrowRight'):
+                            pg.evaluate('() => window.__tabItems[0].focus()')
+                            pg.keyboard.press(key)
+                            if pg.evaluate('() => window.__tabItems.slice(1).includes(document.activeElement)'):
+                                moved = True
+                                break
+                    if not moved:
+                        bad.append(('onglets-clavier', pid, 'barre « %s » : le focus ne passe pas d\'un onglet au '
+                                    'suivant au clavier (Tab ou flèche droite)' % label))
+                except Exception as exc:
+                    print('clavier %s : %s' % (pid, str(exc).splitlines()[0][:120]))
+            for href in bar['hrefs']:
+                if href and not href.startswith(('#', 'javascript:')):
+                    rel = self.rel(urljoin(pg.url, href))
+                    if rel:
+                        tablinks.append((pid, label, rel))
+        try:
+            pg.set_viewport_size({'width': 1440, 'height': 1000})
+        except Exception:
+            pass
+
+    def check_tab_targets(self, pg, tablinks, status, disabled, bad):
+        # Onglets vers une page refusée au compte (403) ou vers un module désactivé.
+        for pid, label, rel in tablinks:
+            if rel not in status:
+                try:
+                    r = pg.request.get(self.base + '/' + rel, timeout=60000)
+                    status[rel] = r.status
+                    disabled[rel] = bool(DISABLED.search(re.sub(r'<[^>]+>', ' ', r.text())))
+                except Exception:
+                    continue
+            if status[rel] == 403:
+                bad.append(('onglet-refuse', pid, 'onglet de la barre « %s » vers %s, refusé (403) à ce compte : '
+                            'ne pas afficher un onglet que le profil ne peut pas ouvrir' % (label, self.page_id(rel))))
+            elif disabled.get(rel):
+                bad.append(('onglet-inactif', pid, 'onglet de la barre « %s » vers %s, qui annonce un module '
+                            'désactivé : masquer l\'onglet tant que le module est désactivé' % (label, self.page_id(rel))))
+
     def crawl(self, browser, login, password, admin, axe_base):
         ctx = browser.new_context(viewport={'width': 1440, 'height': 1000})
         pg = ctx.new_page()
@@ -252,6 +357,7 @@ class Crawler:
         outlinks, variants = {}, {}
         queue = menu + [self.prefix + p for p in self.front] + self.forms + self.core
         done, tabs_seen = set(), set()
+        status, disabled, tablinks = {}, {}, []
         while queue and len(done) < MAX_PAGES:
             name = queue.pop(0)
             if name in done:
@@ -266,6 +372,7 @@ class Crawler:
                     bad.append(('http-500', pid, 'ouverture impossible : ' + str(exc).splitlines()[0][:120]))
                 continue
             st = r.status if r else 0
+            status[name] = st
             ms = self.server_ms(pg)
             timings.append((ms, pid))
             if self.max_ms and ms > self.max_ms:
@@ -276,6 +383,10 @@ class Crawler:
             except Exception:
                 body, text = '', 1
             e = ERR.search(body)
+            try:
+                disabled[name] = bool(DISABLED.search(pg.inner_text('main#page', timeout=2000)))
+            except Exception:
+                disabled[name] = False
             ctype = (r.headers.get('content-type', '') if r else '') or 'text/html'
             strict = name in linked
             if st >= 500:
@@ -291,6 +402,8 @@ class Crawler:
                 bad.append(('blank', pid, 'page blanche'))
             elif st == 200 and 'html' in ctype and name not in self.core:
                 if self.check_crumbs(pg, name, admin, bad):
+                    if pid in self.front:
+                        self.check_tab_bars(pg, pid, admin, bad, tablinks)
                     if admin and urlsplit(name).path[len(self.prefix):] in self.front and '?' not in name:
                         screens.add(pid)
                     found_axe = {}
@@ -325,6 +438,7 @@ class Crawler:
                     bad.append(('js', pid, found[0]))
                 else:
                     print('JS isolé (non retenu) %s %s : %s' % (login, pid, first[0]))
+        self.check_tab_targets(pg, tablinks, status, disabled, bad)
         ctx.close()
         # Atteignables : menu, puis liens successifs (quel que soit l'ordre de visite).
         todo = list(reachable)
@@ -376,6 +490,7 @@ def main():
     ap.add_argument('--exceptions', default='')
     ap.add_argument('--max-ms', type=int, default=3000)
     ap.add_argument('--mode', default='error', choices=['error', 'warning'])
+    ap.add_argument('--tabs-mode', default='error', choices=['error', 'warning'])
     args = ap.parse_args()
     args.base = args.base.rstrip('/')
     accounts = args.account or ['glpi:glpi', 'tech:tech']
@@ -408,6 +523,9 @@ def main():
             seen.add((login, kind, pid))
             if excused(kind, pid):
                 print('exception crawl %s %s (%s) : %s' % (kind, pid, login, msg))
+                continue
+            if kind.startswith('onglet') and args.tabs_mode == 'warning':
+                print('::warning::crawl %s %s (%s) : %s' % (kind, pid, login, msg))
                 continue
             issues += 1
             print('::%s::crawl %s %s (%s) : %s' % (level, kind, pid, login, msg))

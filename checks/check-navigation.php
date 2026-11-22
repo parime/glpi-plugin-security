@@ -25,13 +25,21 @@
  *    la classe passée est une entrée de menu, le secteur de cette entrée (fil d'Ariane).
  *      - page-entete : page affichée sans en-tête ;
  *      - entete-secteur : secteur de l'en-tête incohérent avec le menu déclaré.
+ * 4. Rubriques et modules (issue #34, mode propre tabs-mode) :
+ *      - rubrique-onglets : plus de 7 sous-pages dans une rubrique (sections(), screens(), tabs(),
+ *        subPages() qui renvoient un tableau, clé 'pages' => [...]) ;
+ *      - module-inactif : classe d'un module activable (is…Enabled()) dont getTabNameForItem() ou
+ *        getMenuContent() ne consulte pas l'activation ;
+ *      - config-version : page de configuration sans l'encadré « Version du plugin »
+ *        (_plugin_version.html.twig du modèle).
  *
  * Faux positif ou écart justifié : ligne « <contrôle> <identifiant> : <raison> » dans
  * .glpi-security-exceptions, avec l'identifiant affiché entre crochets dans le message.
  *
- * Usage : php checks/check-navigation.php <dossier du plugin> [error|warning]
- *   error (par défaut) : code de sortie 1 si un écart ; warning : annotations ::warning::, code 0
- *   (plugin dont l'issue de navigation est ouverte, voir le README).
+ * Usage : php checks/check-navigation.php <dossier du plugin> [error|warning] [error|warning]
+ *   Premier mode (navigation-mode) : points 1 à 3 ; second (tabs-mode) : point 4. error (par défaut) :
+ *   code de sortie 1 si un écart ; warning : annotations ::warning::, code 0 (plugin dont l'issue de
+ *   navigation est ouverte, voir le README).
  */
 
 declare(strict_types=1);
@@ -52,13 +60,16 @@ const ACTION_NOW = '/\b(?:récupérer|recuperer|envoyer|importer|mettre à jour|
 /** Libellés candidats d'une ligne : chaînes entre apostrophes ou guillemets, texte entre balises. */
 const LABELS = '/(?=\'((?:[^\'\\\\\n]|\\\\.){1,60})\'|"((?:[^"\\\\\n]|\\\\.){1,60})"|>([^<>{}\n]{1,60})<)/u';
 /** Dernier nom de la collection parcourue par un tableau de résultats ou de registre. */
+/** Sous-pages au plus par rubrique ou barre d'onglets (issue #34). */
+const MAX_SUBPAGES = 7;
 const RESULT_WORDS = '/^(results?|logs?|history|histories|runs?|imports?|reports?|alerts?|findings?|scans?|events?|'
     . 'tickets?|records?|entries|journal|executions?|registers?|registry|readings?|reads?|fetched)$/i';
 
 $dir = $argv[1] ?? '.';
 $mode = $argv[2] ?? 'error';
-if (!in_array($mode, ['error', 'warning'], true)) {
-    fwrite(STDERR, "Mode inconnu : $mode (error ou warning)\n");
+$tabsMode = $argv[3] ?? 'error';
+if (!in_array($mode, ['error', 'warning'], true) || !in_array($tabsMode, ['error', 'warning'], true)) {
+    fwrite(STDERR, "Mode inconnu : $mode / $tabsMode (error ou warning)\n");
     exit(2);
 }
 if (!is_dir($dir) || !chdir($dir)) {
@@ -256,18 +267,22 @@ if (is_file(EXCEPTIONS)) {
     }
 }
 
-$problems = 0;
+$problems = 0;   // écarts bloquants
+$warnings = 0;   // écarts en mode avertissement
 $excused = 0;
 $level = $mode === 'error' ? 'error' : 'warning';
-$report = static function (string $id, string $file, int $line, string $message) use (&$problems, &$excused, $exceptions, $level): void {
+// Rubriques, onglets et encadré « Version du plugin » (issue #34) : mode propre (tabs-mode).
+$tabsLevel = $tabsMode === 'error' ? 'error' : 'warning';
+$report = static function (string $id, string $file, int $line, string $message, ?string $as = null) use (&$problems, &$warnings, &$excused, $exceptions, $level): void {
     if (isset($exceptions[$id])) {
         $excused++;
         echo "EXCEPTION  $id (justifiée dans " . EXCEPTIONS . ")\n";
         return;
     }
-    $problems++;
+    $as ??= $level;
+    $as === 'error' ? $problems++ : $warnings++;
     $where = $file === '' ? '' : " file=$file" . ($line > 0 ? ",line=$line" : '');
-    echo "::$level$where::$message [$id]\n";
+    echo "::$as$where::$message [$id]\n";
 };
 
 // --- Hooks de setup.php : clé, config_page, menu_toadd ----------------------------------------
@@ -538,6 +553,11 @@ $configFiles = [];
 $queue = [];
 if ($configPage !== null && is_file($configPage)) {
     $queue[] = $configPage;
+    // Blocs de réglages découverts par fichier (GRC : src/Config/Block/*.php,
+    // templates/config/blocks/*.twig), inclus dynamiquement par la page de configuration.
+    foreach (array_merge(files(['php'], 'src/Config'), files(['twig'], 'templates/config')) as $block) {
+        $queue[] = $block;
+    }
 }
 foreach ($pages as $front => $info) {
     foreach ($info['headers'] as [$sector, $class]) {
@@ -753,6 +773,122 @@ foreach ($chunks as [$file, $offset, $raw, $context]) {
     }
 }
 
+// --- 4. Rubriques : au plus 7 sous-pages (issue #34) -----------------------------------------
+// Déclarations lues : fonctions sections(), screens(), tabs(), subPages() qui renvoient un tableau
+// (rubrique => liste de sous-pages, comme Menu::sections() de GRC, ou écrans d'une barre, comme
+// Menu::screens() de Docker et FinOps), et clés 'pages' => [...] (MenuSection d'AssetSign).
+/** Vrai si l'élément de tableau contient « => » à son premier niveau. */
+$hasArrow = static function (array $element): bool {
+    $depth = 0;
+    foreach ($element as $t) {
+        $depth += in_array($t[1], ['(', '[', '{'], true) ? 1 : (in_array($t[1], [')', ']', '}'], true) ? -1 : 0);
+        if ($depth === 0 && $t[0] === T_DOUBLE_ARROW) {
+            return true;
+        }
+    }
+    return false;
+};
+$rubriques = 0;
+$tooMany = static function (string $id, string $file, int $line, string $what, int $count) use ($report, $tabsLevel, &$rubriques): void {
+    $rubriques++;
+    if ($count > MAX_SUBPAGES) {
+        $report($id, $file, $line, "$what : $count sous-pages, au plus " . MAX_SUBPAGES . ' par rubrique (barre d\'onglets '
+            . 'sur une ligne, lisible et navigable au clavier). Regrouper des écrans, en faire des onglets des fiches, ou '
+            . 'ouvrir une nouvelle rubrique. Charte, section 9 : ' . CHARTER, $tabsLevel);
+    }
+};
+$moduleClasses = [];
+foreach ($phpFiles as $php) {
+    if (str_starts_with($php, 'front/') || str_starts_with($php, 'ajax/')) {
+        continue;
+    }
+    $code = (string) file_get_contents($php);
+    $t = tokens($code);
+    for ($i = 0, $n = count($t); $i < $n - 2; $i++) {
+        // 'pages' => [A::class, B::class, ...]
+        if ($t[$i][0] === T_CONSTANT_ENCAPSED_STRING && unquote($t[$i][1]) === 'pages'
+            && ($t[$i + 1][0] ?? 0) === T_DOUBLE_ARROW && ($t[$i + 2][1] ?? '') === '[') {
+            $tooMany("rubrique-onglets $php:" . $t[$i][2], $php, $t[$i][2], "rubrique déclarée par 'pages' (ligne {$t[$i][2]})",
+                count(splitTopLevel($t, $i + 2)));
+        }
+        if ($t[$i][0] !== T_FUNCTION || !in_array(strtolower($t[$i + 1][1] ?? ''), ['sections', 'screens', 'tabs', 'subpages'], true)) {
+            continue;
+        }
+        $function = $t[$i + 1][1];
+        $open = $i + 2;
+        while ($open < $n && $t[$open][1] !== '{' && $t[$open][1] !== ';') {
+            $open++;
+        }
+        if (($t[$open][1] ?? '') !== '{') {
+            continue;
+        }
+        $end = closing($t, $open);
+        for ($j = $open; $j < $end; $j++) {
+            if ($t[$j][0] !== T_RETURN || ($t[$j + 1][1] ?? '') !== '[') {
+                continue;
+            }
+            $elements = splitTopLevel($t, $j + 1);
+            $class = preg_match('/class\s+(\w+)/', $code, $m) ? $m[1] : $php;
+            $map = $elements !== [] && $hasArrow($elements[0]);
+            $lists = $map;
+            foreach ($elements as $element) {
+                $k = 0;
+                while ($k < count($element) && $element[$k][0] !== T_DOUBLE_ARROW) {
+                    $k++;
+                }
+                $value = array_slice($element, $k + 1);
+                if (($value[0][1] ?? '') !== '[' || array_filter(splitTopLevel($value, 0), $hasArrow) !== []) {
+                    $lists = false;
+                }
+            }
+            if ($lists) {
+                // Rubrique => liste de sous-pages : la barre affiche la rubrique et ses sous-pages.
+                foreach ($elements as $element) {
+                    $k = 0;
+                    while ($element[$k][0] !== T_DOUBLE_ARROW) {
+                        $k++;
+                    }
+                    $parent = text(array_slice($element, 0, $k));
+                    $tooMany("rubrique-onglets $class::$function() $parent", $php, $element[0][2],
+                        "rubrique $parent de $class::$function()", count(splitTopLevel(array_slice($element, $k + 1), 0)) + 1);
+                }
+            } else {
+                $tooMany("rubrique-onglets $class::$function()", $php, $t[$j][2], "barre d'onglets de $class::$function()", count($elements));
+            }
+            break;
+        }
+    }
+    // Module activable (méthode is…Enabled()) : son onglet et son entrée de menu en dépendent.
+    // isReviewEnabled() et autres options d'un écran ne comptent pas : seule l'activation du module.
+    if (preg_match('/function\s+(is(?:Module|Framework|Feature)?Enabled)\s*\(/', $code, $m) && preg_match('/^\s*(?:(?:final|abstract)\s+)*class\s+(\w+)/m', $code, $c)) {
+        foreach (['getTabNameForItem', 'getMenuContent'] as $method) {
+            $body = methodBody($code, $method);
+            if ($body !== null && !preg_match('/is\w*Enabled\s*\(|ModuleConfig|::load\(\)/', $body[1])) {
+                $report("module-inactif {$c[1]}::$method", $php, $body[0] + 1, "{$c[1]}::$method() ne consulte pas "
+                    . "{$c[1]}::{$m[1]}() : l'onglet ou l'entrée de menu reste affiché quand le module est désactivé. "
+                    . "Renvoyer '' (onglet) ou false (menu) tant que {$m[1]}() est faux. Charte, section 9 : " . CHARTER, $tabsLevel);
+            }
+        }
+    }
+}
+
+// --- 5. Encadré « Version du plugin » sur la page de configuration (issue #34) -------------------
+if ($configPage !== null && is_file($configPage)) {
+    $found = false;
+    foreach (array_keys($configFiles) as $file) {
+        if (preg_match('/_plugin_version|PluginVersion/', (string) file_get_contents($file))) {
+            $found = true;
+            break;
+        }
+    }
+    if (!$found) {
+        $report("config-version $configPage", $configPage, 0, "la page de configuration n'affiche pas l'encadré "
+            . '« Version du plugin » (version installée et dernière version publiée). Inclure le composant du modèle '
+            . "{% include '@<clé>/_plugin_version.html.twig' %} (parime/glpi-plugin-template, "
+            . 'templates/_plugin_version.html.twig). Charte, section 9 : ' . CHARTER, $tabsLevel);
+    }
+}
+
 // --- Bilan ------------------------------------------------------------------------------------
 $summary = sprintf(
     '%d entrée(s) de menu dans %d secteur(s), %d page(s) front/, page de configuration %s (%d fichier(s) lus), %d exception(s) justifiée(s)',
@@ -762,13 +898,13 @@ $summary = sprintf(
     $configPage ?? 'non déclarée',
     count($configFiles),
     $excused
-);
-if ($problems > 0) {
-    echo "$problems écart(s) d'ergonomie ($summary).\n";
-    if ($mode === 'warning') {
-        echo "Mode avertissement (navigation-mode: warning) : le job ne bloque pas, le temps de l'issue de navigation du plugin.\n";
-        exit(0);
+) . ", $rubriques rubrique(s) ou barre(s) d'onglets";
+if ($problems + $warnings > 0) {
+    echo ($problems + $warnings) . " écart(s) d'ergonomie, dont $problems bloquant(s) ($summary).\n";
+    if ($warnings > 0) {
+        echo "Mode avertissement (navigation-mode ou tabs-mode: warning) : $warnings écart(s) ne bloquent pas, "
+            . "le temps de l'issue de navigation du plugin.\n";
     }
-    exit(1);
+    exit($problems > 0 ? 1 : 0);
 }
-echo "Ergonomie : réglages, menus et en-têtes conformes ($summary).\n";
+echo "Ergonomie : réglages, menus, en-têtes et rubriques conformes ($summary).\n";

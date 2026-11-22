@@ -14,4 +14,16 @@ class PluginSecbadReport extends CommonGLPI
     {
         return 'Report';
     }
+
+    // Défaut volontaire d'ergonomie (issue #34) : module activable dont l'onglet ne consulte pas
+    // l'activation (affiché même désactivé).
+    public static function isEnabled(): bool
+    {
+        return false;
+    }
+
+    public function getTabNameForItem(CommonGLPI $item, $withtemplate = 0)
+    {
+        return 'Report';
+    }
 }

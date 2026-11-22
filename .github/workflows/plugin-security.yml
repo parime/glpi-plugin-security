@@ -87,6 +87,11 @@ on:
         required: false
         type: string
         default: error
+      tabs-mode:
+        description: "Rubriques et barres d'onglets (au plus 7, une ligne, clavier, rien d'inactif) et encadré Version du plugin : error (par défaut) ou warning, le temps de l'issue de navigation du plugin"
+        required: false
+        type: string
+        default: error
       pages-test:
         description: "Parcours de toutes les pages du plugin (false pour le désactiver)"
         required: false
@@ -198,7 +203,8 @@ jobs:
       - name: Page de configuration sans exploitation, menus, en-têtes des pages
         env:
           MODE: ${{ inputs.navigation-mode }}
-        run: php .glpi-plugin-security/checks/check-navigation.php . "$MODE"
+          TABS_MODE: ${{ inputs.tabs-mode }}
+        run: php .glpi-plugin-security/checks/check-navigation.php . "$MODE" "$TABS_MODE"
 
   archive:
     name: Archive de release sans fichier de développement
@@ -544,7 +550,8 @@ jobs:
           MODE: ${{ inputs.pages-mode }}
           MAX_MS: ${{ inputs.pages-max-ms }}
           ACCOUNTS: ${{ inputs.pages-accounts }}
-        run: bash security/checks/check-pages.sh plugin "$PLUGIN_KEY" "$EXCEPTIONS" "$SEED" "$MODE" "$MAX_MS" "$ACCOUNTS"
+          TABS_MODE: ${{ inputs.tabs-mode }}
+        run: bash security/checks/check-pages.sh plugin "$PLUGIN_KEY" "$EXCEPTIONS" "$SEED" "$MODE" "$MAX_MS" "$ACCOUNTS" "$TABS_MODE"
       - name: Journal GLPI (en cas d'échec)
         if: failure()
         run: docker logs glpisec --tail 200
