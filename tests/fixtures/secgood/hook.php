@@ -12,6 +12,8 @@ function plugin_secgood_install(): bool
     }
     if (countElementsInTable('glpi_profilerights', ['name' => 'plugin_secgood']) === 0) {
         ProfileRight::addProfileRights(['plugin_secgood']);
+        // Droit donné au profil Super-Admin : l'entrée de menu et les pages s'ouvrent pour lui (issue #23).
+        ProfileRight::updateProfileRights(4, ['plugin_secgood' => ALLSTANDARDRIGHT]);
     }
     // Donnée du plugin dans une table du cœur (comme un suivi ou une note sur ses objets).
     $DB->insert('glpi_notepads', ['itemtype' => 'PluginSecgoodThing', 'items_id' => 1, 'content' => 'note']);

@@ -428,3 +428,33 @@ jobs:
       - name: Journal GLPI (en cas d'échec)
         if: failure()
         run: docker logs glpisec --tail 200
+
+  pages:
+    name: Parcours des pages (${{ matrix.image }}, secbad échoue, secgood passe)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ["glpi/glpi:11.0.11", "glpi/glpi:12.0.1"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+      - env:
+          IMAGE: ${{ matrix.image }}
+        run: bash checks/start-glpi.sh "$IMAGE"
+      # secbad : page en 500 (crash.php), écran hors menu avec une image sans texte de remplacement
+      # (hidden.php), page de configuration rangée dans Assistance (fil d'Ariane faux).
+      - name: secbad doit échouer sur chaque défaut
+        run: |
+          out=$(bash checks/check-pages.sh tests/fixtures/secbad secbad) && { echo "$out"; echo "::error::le parcours ne bloque plus secbad"; exit 1; }
+          echo "$out"
+          for id in "crawl http-500 front/crash.php" "crawl orphan front/hidden.php" "crawl ariane front/config.php"                     "crawl axe:image-alt front/hidden.php" "crawl php-errors"; do
+            grep -q "^::error::$id" <<< "$out" || { echo "::error::défaut non signalé : $id"; exit 1; }
+          done
+      - name: secbad n'échoue pas en mode avertissement, mais avertit
+        run: |
+          out=$(bash checks/check-pages.sh tests/fixtures/secbad secbad "" "" warning) || { echo "$out"; echo "::error::le mode avertissement bloque"; exit 1; }
+          grep -q "^::warning::crawl orphan front/hidden.php" <<< "$out" || { echo "$out"; echo "::error::le mode avertissement n'annote plus"; exit 1; }
+      - name: secgood doit passer
+        run: |
+          out=$(bash checks/check-pages.sh tests/fixtures/secgood secgood .glpi-security-exceptions) || { echo "$out"; exit 1; }
+          echo "$out"

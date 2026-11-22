@@ -1,11 +1,12 @@
 {# SPDX-License-Identifier: GPL-3.0-or-later #}
 {# Version correcte (issue #22) : réglages seulement ; la lecture et ses résultats sont dans Outils. #}
 <form method="post" action="config.php">
-  <input type="url" name="url" class="form-control">
+  <label for="secgood-url" class="form-label">{{ __('Adresse du connecteur', 'secgood') }}</label>
+  <input type="url" id="secgood-url" name="url" class="form-control">
   <button type="submit" name="test" class="btn btn-outline-secondary">{{ __('Tester la connexion', 'secgood') }}</button>
   <table class="table">
     {% for source in sources %}
-      <tr><td>{{ source.name }}</td><td><input type="number" name="threshold[{{ source.id }}]"></td></tr>
+      <tr><td>{{ source.name }}</td><td><input type="number" name="threshold[{{ source.id }}]" aria-label="{{ source.name }}"></td></tr>
     {% endfor %}
   </table>
   <p>{{ __('La lecture se lance depuis Outils > secgood, qui affiche aussi son résultat.', 'secgood') }}</p>
