@@ -3,8 +3,13 @@
 name: Auto-test
 
 on:
+  # Push : main et les étiquettes (contrôle de security-ref sur chaque étiquette) ; une branche de
+  # travail est contrôlée par sa PR, sans seconde exécution identique pour chaque commit.
   push:
+    branches: [main]
+    tags: ['v*']
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
