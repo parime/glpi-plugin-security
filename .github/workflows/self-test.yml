@@ -93,6 +93,24 @@ jobs:
       - name: secgood doit passer
         run: bash checks/check-em-dash.sh tests/fixtures/secgood
 
+  colors:
+    name: Contrôle des classes de couleur des badges (secbad échoue, secgood passe)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+      # secbad : bg-orange-subtle et text-orange-emphasis écrites, purple dans une classe Twig
+      # construite, pink fournie par le PHP ; secgood : feuille CSS du plugin et table de couleurs.
+      - name: secbad doit échouer sur les quatre défauts
+        run: |
+          out=$(php checks/check-subtle-colors.php tests/fixtures/secbad)             && { echo "$out"; echo "::error::le contrôle ne détecte plus les classes non définies de secbad"; exit 1; }
+          echo "$out"
+          for expected in "file=templates/badges.html.twig,line=2::la classe bg-orange-subtle"                           "file=templates/badges.html.twig,line=2::la classe text-orange-emphasis"                           "file=templates/badges.html.twig,line=3::la couleur « purple »"                           "file=inc/badge.php,line=6::la couleur « pink »"; do
+            grep -qF "$expected" <<< "$out" || { echo "::error::défaut non signalé : $expected"; exit 1; }
+          done
+          [ "$(grep -c '^::error' <<< "$out")" = 4 ] || { echo "::error::nombre d'écarts de secbad inattendu"; exit 1; }
+      - name: secgood doit passer
+        run: php checks/check-subtle-colors.php tests/fixtures/secgood
+
   archive:
     name: Contrôle de l'archive (sans export-ignore échoue, avec passe)
     runs-on: ubuntu-latest

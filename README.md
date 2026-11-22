@@ -62,6 +62,31 @@ Aucun tiret cadratin dans les fichiers du plugin suivis par git (hors `vendor`, 
 parenthèses, ou « - » pour un séparateur. Un nom historique à retrouver lors d'une migration
 s'écrit avec la séquence d'échappement `"\u{2014}"`.
 
+### Couleurs des badges (`checks/check-subtle-colors.php`)
+
+GLPI et Tabler ne définissent les classes Bootstrap 5.3 `bg-X-subtle`, `text-X-emphasis` et
+`border-X-subtle` que pour les couleurs de thème : primary, secondary, success, info, warning,
+danger, light, dark. Avec une couleur nommée de Tabler (orange, blue, green, purple…), le badge
+s'affiche sans fond (charte, section 8). Le contrôle échoue, avec le fichier, la ligne et la
+correction, quand un template Twig, un fichier PHP ou JS du plugin (hors `vendor`, `node_modules`,
+`tests`, `lib`, `build`, `dist`) utilise une telle classe qui n'est ni de thème ni définie dans une
+feuille CSS du plugin :
+
+- écrite telle quelle (`bg-orange-subtle`) ;
+- construite dans Twig (`bg-{{ ok ? 'green' : 'red' }}-subtle` : les couleurs entre apostrophes de
+  l'expression, hors opérandes d'une comparaison) ;
+- fournie par le PHP (`'color' => 'orange'`, `'tone' => 'red'`, `'badge_color' => …`).
+
+Une couleur traduite par une table Twig vers une couleur définie (`{ indigo: 'info' }`, comme la
+macro `_tone.html.twig` de Docker Inventory) est considérée comme traitée. Correction : une couleur
+de thème, ou la [feuille commune du modèle](https://github.com/parime/glpi-plugin-template/blob/main/public/css/monplugin.css)
+(`public/css/<clé>.css`, chargée par `$PLUGIN_HOOKS[Hooks::ADD_CSS]`), qui couvre les douze
+couleurs nommées en thème clair et sombre. Faux positif : `subtle-color <classe ou couleur> : raison`
+dans `.glpi-security-exceptions`. Même logique que `tests/Unit/SubtleColorClassesTest.php` du
+modèle, sans PHPUnit.
+
+Lancement local, depuis le dossier du plugin : `php <glpi-plugin-security>/checks/check-subtle-colors.php .`
+
 ### Archive publiée (`checks/check-archive.sh`)
 
 L'archive de release est construite avec `git archive` : elle ne doit contenir aucun fichier de
