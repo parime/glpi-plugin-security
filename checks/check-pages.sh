@@ -62,7 +62,7 @@ for a in $ACCOUNTS; do ACC_ARG+=(--account "$a"); done
 # Le navigateur partage le réseau du conteneur GLPI : http://localhost est GLPI lui-même.
 MSYS_NO_PATHCONV=1 docker run --rm --network "container:$C" \
   -v "$HERE:/checks:ro" -v "$(hostpath "$W"):/work" "$PLAYWRIGHT_IMAGE" \
-  sh -c 'pip install --quiet --disable-pip-version-check --root-user-action=ignore playwright==1.57.0 && exec python /checks/crawl-pages.py "$@"' sh \
+  sh -c 'pip install --quiet --disable-pip-version-check --root-user-action=ignore playwright==1.57.0 && exec python -u /checks/crawl-pages.py "$@"' sh \
   http://localhost --key "$KEY" --data /work/data.json --axe /work/axe.min.js --max-ms "$MAX_MS" --mode "$MODE" \
   "${EXC_ARG[@]}" "${ACC_ARG[@]}" | tee "$W/crawl.log"
 CRAWL=${PIPESTATUS[0]}
