@@ -1,0 +1,9 @@
+{#
+ # SPDX-License-Identifier: GPL-3.0-or-later
+ #}
+{# Couleur de thème, couleur nommée définie par public/css/secgood.css, couleur traduite par une table. #}
+{% set semantic = { indigo: 'info', orange: 'orange' }[info.color]|default('secondary') %}
+<span class="badge bg-orange-subtle text-orange-emphasis">Haute</span>
+<span class="badge bg-{{ ok ? 'success' : 'orange' }}-subtle">État</span>
+<span class="badge bg-{{ semantic }}-subtle text-{{ semantic }}-emphasis">Préversion</span>
+<span class="badge bg-warning-subtle text-warning-emphasis {{ line.decision == 'remove' ? 'opacity-50' }}">Moyenne</span>

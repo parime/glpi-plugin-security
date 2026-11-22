@@ -106,6 +106,22 @@ jobs:
       - name: Tiret cadratin refusé (chaînes, traductions, documentation)
         run: bash .glpi-plugin-security/checks/check-em-dash.sh .
 
+  colors:
+    name: Classes de couleur des badges définies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+        with:
+          repository: parime/glpi-plugin-security
+          ref: ${{ inputs.security-ref }}
+          path: .glpi-plugin-security
+      # Charte section 8 (issue #20) : Tabler ne définit bg-X-subtle, text-X-emphasis et
+      # border-X-subtle que pour les couleurs de thème ; une couleur nommée (orange...) doit être
+      # définie par une feuille CSS du plugin, sinon le badge s'affiche sans fond.
+      - name: bg-X-subtle / text-X-emphasis / border-X-subtle de thème ou définies par le plugin
+        run: php .glpi-plugin-security/checks/check-subtle-colors.php .
+
   archive:
     name: Archive de release sans fichier de développement
     runs-on: ubuntu-latest
