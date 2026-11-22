@@ -163,6 +163,28 @@ mode bloquant avant ce changement. En v1.7.x et v1.8.x, le défaut était `warni
 peut repasser temporairement en avertissement avec `charter-mode: warning` dans son `security.yml`,
 le temps d'une issue de mise en conformité ouverte dans son dépôt.
 
+### Analyses communes : secrets, dépendances, CodeQL (`checks/`, issue #25)
+
+Les mêmes quatre analyses, avec la même configuration, pour chaque plugin. Elles remplacent les jobs
+équivalents que chaque plugin avait copiés dans sa propre CI, à retirer lors de la montée de version.
+
+| Job | Outil | Défaut détecté | Exception (`.glpi-security-exceptions`) |
+|---|---|---|---|
+| `secrets` | Gitleaks 8.30.1 (`check-secrets.sh`) | Secret (mot de passe, jeton, clé d'API) dans les fichiers du dépôt, et sur une pull request dans chacun de ses commits | `gitleaks <Fingerprint> : raison`, l'empreinte affichée par Gitleaks (`fichier:règle:ligne`, précédée du commit pour un secret de l'historique) |
+| `dependencies` | Trivy 0.76.1 (`check-dependencies.sh`) | Dépendance composer ou npm (`composer.lock`, `package-lock.json`, `yarn.lock`, `vendor/`…) avec une vulnérabilité HIGH ou CRITICAL corrigée dans une version publiée | `trivy CVE-2026-12345 : raison` |
+| `codeql` | CodeQL, suite par défaut (`codeql-languages.sh`, `check-codeql-sarif.sh`) | Résultat CodeQL pour chaque langage présent : `actions` (workflows), `javascript` (JavaScript, TypeScript), `python`. PHP reste couvert par Semgrep | `codeql <règle> <fichier ou motif> : raison`, par exemple `codeql js/xss-through-dom public/lib/* : bibliothèque tierce` |
+| `dependency-review` | Dependency Review, sur les pull requests seulement | Dépendance ajoutée ou mise à jour par la PR (composer, npm, actions) avec un avis de gravité `moderate` ou plus | `dependency-review GHSA-xxxx-xxxx-xxxx : raison` |
+
+Gitleaks et Trivy tournent dans leur image officielle épinglée par son empreinte : pas de
+gitleaks-action, refusée (403) au jeton en lecture seule des PR Dependabot. CodeQL lit ses résultats
+dans le job (`upload: never`) : le plugin n'a aucun droit `security-events` à donner au workflow
+réutilisable, et la configuration CodeQL par défaut du dépôt (onglet Security) peut rester active
+sans conflit. Dependency Review demande le graphe de dépendances activé dans le dépôt (Settings >
+Code security). Une exception sans raison (pas de « : ») fait échouer le job.
+
+Lancement local (Docker requis), depuis ce dépôt : `bash checks/check-secrets.sh <dossier> [exceptions]`,
+`bash checks/check-dependencies.sh <dossier> [exceptions]`.
+
 ## Exceptions justifiées
 
 Un faux positif se déclare dans `.glpi-security-exceptions`, à la racine du dépôt du plugin, une ligne
