@@ -30,6 +30,12 @@ function plugin_init_secbad(): void
 
     $PLUGIN_HOOKS['csrf_compliant']['secbad'] = true;
     Plugin::registerClass(PluginSecbadThing::class, ['addtabon' => ['Computer']]);
-    // Deux entrées de menu : la charte commune n'en admet qu'une (avertissement « menus »).
-    $PLUGIN_HOOKS['menu_toadd']['secbad'] = ['tools' => PluginSecbadThing::class, 'admin' => [PluginSecbadThing::class]];
+    // Trois entrées de menu : la charte commune n'en admet qu'une (contrôle « menus »). Ergonomie
+    // (issue #22) : deux entrées dans Outils, une dans Configuration (les réglages passent par
+    // config_page), et une page de configuration qui contient de l'exploitation.
+    $PLUGIN_HOOKS['menu_toadd']['secbad'] = [
+        'tools'  => [PluginSecbadThing::class, 'PluginSecbadReport'],
+        'config' => [PluginSecbadThing::class],
+    ];
+    $PLUGIN_HOOKS['config_page']['secbad'] = 'front/config.php';
 }

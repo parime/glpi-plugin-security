@@ -23,6 +23,8 @@ jobs:
       # Facultatif : jeu de données créé avant la désinstallation, pour que le contrôle des
       # restes porte sur de vraies données (dossier de GLPI, utilisateur www-data).
       # seed-command: php plugins/monplugin/tests/security/setup.php
+      # Test de mise à jour depuis la dernière release (GLPI 11 et 12), actif par défaut :
+      # upgrade-test: false pour le désactiver, upgrade-seed-command pour un autre jeu de données.
 ```
 
 Puis rendre le job « security » obligatoire dans la protection de la branche principale. Un nouveau
@@ -86,6 +88,56 @@ dans `.glpi-security-exceptions`. Même logique que `tests/Unit/SubtleColorClass
 modèle, sans PHPUnit.
 
 Lancement local, depuis le dossier du plugin : `php <glpi-plugin-security>/checks/check-subtle-colors.php .`
+
+### Ergonomie : réglages, menus, fil d'Ariane (`checks/check-navigation.php`)
+
+Règle « Où placer un écran » (charte, section 9) : les réglages dans la page de configuration du
+plugin (Configuration > Plugins, en onglets), l'exploitation dans le menu GLPI où un utilisateur la
+cherche (Parc, Assistance, Gestion, Outils ou le menu propre du plugin), et rien de l'exploitation
+dans le paramétrage. Contrôle statique (sans GLPI), job `navigation` du workflow. Chaque écart
+indique le fichier, la ligne, le problème, l'emplacement attendu, et son identifiant entre crochets :
+
+| Identifiant | Écart |
+|---|---|
+| `config-action <fichier>` | Bouton « … maintenant » (récupérer, envoyer, importer, mettre à jour, télécharger, lire, synchroniser ; français ou anglais) dans la page de configuration. « Tester la connexion » reste un réglage |
+| `config-tableau <fichier>` | Tableau de résultats ou de registre : `<table>` qui parcourt des résultats, journaux, imports, alertes, rapports…, ou `components/datatable.html.twig` |
+| `config-lien <fichier> > <cible>` | Lien vers une page `front/` d'exploitation : adresse écrite, `getSearchURL()`, `getFormURL()`, `get…URL()`, `Menu::url('<page>')` d'une classe du plugin. Ne comptent pas : classes dont le nom contient `Config`, intitulés (`CommonDropdown`), classes du cœur (droits, notifications), pages rangées dans Configuration hors entrée de menu, traitements de formulaire sans affichage |
+| `menus-secteur <secteur>` | Plus d'une entrée `menu_toadd` dans un même secteur GLPI |
+| `menus-entree-native config > <classe>` | Entrée de menu dans le secteur Configuration : les réglages passent par `config_page` |
+| `page-entete <front/page.php>` | Page qui affiche un écran GLPI (`Html::footer()`, `->display()`, `Search::show()`…) sans `Html::header()` ni en-tête équivalent. Ne comptent pas : téléchargements et pages autonomes (`header('Content-Type: …')`), pages du cœur incluses |
+| `entete-secteur <front/page.php>` | `Html::header(…, <secteur>, <classe>)` incohérent avec le menu : secteur où le plugin n'a pas d'entrée (hors `config`), ou classe d'une entrée de menu déclarée dans un autre secteur (fil d'Ariane et menu actif faux) |
+
+Fichiers lus pour la page de configuration : le fichier du hook `config_page`, les pages `front/`
+rangées dans Configuration > Plugins (`Html::header(…, 'config', 'plugin')` ou `Plugin::class`), les
+templates qu'elles affichent et incluent, les classes du plugin dont le nom contient `Config`, les
+objets qu'une sous-page de réglages crée (`new Connection()`) et le corps des méthodes `config*()`
+appelées (`EndOfLife::configData()`). Les exceptions de menu sont celles du contrôle dans un vrai
+GLPI : `menus-secteur-metier` (le secteur propre d'un outil métier complet compte pour une entrée)
+et `menus-entree-native <secteur> > <classe>` (entrée justifiée, non comptée). Tout autre écart
+justifié : ligne `<identifiant> : <raison>` dans `.glpi-security-exceptions`.
+
+**Mode avertissement, le temps de l'issue de navigation.** Un plugin qui a des écarts connus, listés
+dans son issue de navigation ouverte, passe le contrôle en avertissement dans son `security.yml` :
+
+```yaml
+    with:
+      plugin-key: monplugin
+      navigation-mode: warning   # jusqu'à la fermeture de parime/monplugin#NN (navigation)
+```
+
+Les écarts deviennent des annotations `::warning::` et le job ne bloque pas. À la fermeture de
+l'issue, la PR qui la ferme retire la ligne : le contrôle redevient bloquant (`error`, par défaut).
+Écarts relevés à la création du contrôle, sur les branches principales :
+
+| Plugin | Issue de navigation | Écarts |
+|---|---|---|
+| GRC Manager (dev) | glpi-iso27001-management#1035 | 15 : en-tête de la configuration et de `riskscale.php` dans Outils, 3 boutons « … now », 10 liens vers des registres |
+| Configuration GLPI Auto | Configuration-glpi-auto#495 | 5 : entrée dans Configuration, page de configuration = assistant (liens, tableau d'audit, envoi) |
+| AssetSign | assetsign-glpi#392 | 3 liens « Voir les… » de la configuration |
+| Inventaire Docker | glpi-docker-inventory#118 | 13 : 7 lectures « … maintenant », 6 liens vers les écrans d'usage |
+| FinOps (dev) | glpi-finops#37 | 2 liens (coûts, inventaire Sangfor) |
+
+Lancement local, depuis le dossier du plugin : `php <glpi-plugin-security>/checks/check-navigation.php . [error|warning]`
 
 ### Archive publiée (`checks/check-archive.sh`)
 
@@ -189,6 +241,51 @@ Le plugin est installé dans le GLPI officiel (11.0.11 par défaut), puis :
   de menu propre compté comme une seule entrée (charte, section 9).
   Une entrée justifiée dans un secteur natif (par exemple un objet ITIL placé dans Assistance) se
   déclare par `menus-entree-native <secteur> > <classe> : <justification>` et n'est plus comptée.
+
+### Mise à jour depuis la version publiée (`checks/check-upgrade.sh`, GLPI 11 et 12)
+
+Ce que font tous les utilisateurs : mettre à jour une installation existante. Une installation
+neuve ne le teste pas (une migration qui oublie une colonne passe la CI et casse chaque mise à
+jour). Le job `upgrade`, une fois par image de `upgrade-glpi-images` (GLPI 11.0.11 et 12.0.1 par
+défaut), dans un GLPI jetable :
+
+1. installe le code de la PR à neuf : schéma, tâches automatiques, notifications et droits de
+   référence ; la base est ensuite remise dans son état d'avant le plugin ;
+2. installe et active la **dernière release publiée** (archive de la release GitHub, vérifiée par
+   son `.sha256` s'il est publié ; sur un push d'étiquette, la release précédente) ;
+3. crée le jeu de données de cette version : `upgrade-seed-command`, sinon `seed-command`, sinon
+   `php plugins/<clé>/tests/security/setup.php` de l'**étiquette** publiée (les `tests/`, exclus de
+   l'archive, sont repris des sources de l'étiquette : le jeu de données correspond à son schéma) ;
+4. remplace le plugin par le code de la PR (dossier vidé d'abord) et lance la mise à jour
+   (`plugin:install --force`, puis `plugin:activate`) ;
+5. vérifie :
+   - **aucune erreur PHP ni SQL** : sortie de la mise à jour, `php-errors.log` et `sql-errors.log`
+     (hors entrées écrites par GLPI lui-même : changement de version détecté, message de test) ;
+   - **schéma identique** à l'installation neuve, table par table (`SHOW CREATE TABLE` : colonnes et
+     leur définition, index et clés uniques, moteur et interclassement ; `AUTO_INCREMENT` et ordre
+     des colonnes ignorés). Table absente ou en trop : écart aussi ;
+   - **données conservées** : nombre de lignes de chaque table du plugin au moins égal ;
+   - **tâches automatiques, notifications et droits** : rien de ce qui existait avant n'a disparu,
+     aucun droit donné à un profil n'est retiré, et rien de ce que crée une installation neuve ne
+     manque (une tâche ajoutée à l'installation mais oubliée dans la migration, par exemple). Un
+     état de tâche ou une activation de notification modifié est signalé en avertissement ;
+   - **pages principales servies** (200, sans erreur affichée) pour l'administrateur : accueil,
+     liste des plugins, entrées de menu du plugin et sa page de configuration.
+
+Le job s'adapte, avec un avertissement et sans échec : aucune release publiée (premier plugin),
+release sans archive (sources de l'étiquette utilisées), version publiée qui ne s'installe pas sur
+cette version de GLPI, pas de jeu de données ou jeu de données en échec. `upgrade-test: false` le
+désactive. Un écart justifié se déclare dans le fichier d'exceptions avec l'identifiant affiché :
+`upgrade-schema <table>`, `upgrade-table-missing <table>`, `upgrade-table-extra <table>`,
+`upgrade-data <table>`, `upgrade-crontask <classe>::<nom>`, `upgrade-notification <classe>::<événement>`,
+`upgrade-right <droit>`.
+
+Auto-test : le plugin `tests/fixtures/upgrade` (clé `secup`) en version 1.0.0 (`old`, avec son jeu de
+données) est mis à jour vers une 1.1.0 correcte (`good`, qui doit passer) et vers une 1.1.0
+défectueuse (`bad`) : migration qui oublie une colonne et un index, table reconstruite, tâche,
+notification et droits retirés, avertissement PHP, page refusée. Chaque défaut doit être signalé.
+Lancement local : `bash checks/check-upgrade.sh <code> <clé> <version publiée> <sources> [exceptions] [jeu de données]`,
+la version publiée étant obtenue par `bash checks/fetch-previous-release.sh <owner/dépôt> <clé> <dossier> <checkout>`.
 
 ### Points d'entrée, matrice d'accès et exigences marketplace (`checks/`)
 

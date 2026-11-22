@@ -35,4 +35,6 @@ function plugin_init_secgood(): void
     Plugin::registerClass(PluginSecgoodProfile::class, ['addtabon' => ['Profile']]);
     // Une seule entrée de menu d'usage (charte commune).
     $PLUGIN_HOOKS['menu_toadd']['secgood'] = ['tools' => [PluginSecgoodThing::class]];
+    // Réglages dans la page de configuration (Configuration > Plugins), sans exploitation (issue #22).
+    $PLUGIN_HOOKS['config_page']['secgood'] = 'front/config.php';
 }
