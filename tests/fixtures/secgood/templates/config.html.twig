@@ -1,5 +1,6 @@
 {# SPDX-License-Identifier: GPL-3.0-or-later #}
 {# Version correcte (issue #22) : réglages seulement ; la lecture et ses résultats sont dans Outils. #}
+{% include '@secgood/_plugin_version.html.twig' %}
 <form method="post" action="config.php">
   <label for="secgood-url" class="form-label">{{ __('Adresse du connecteur', 'secgood') }}</label>
   <input type="url" id="secgood-url" name="url" class="form-control">

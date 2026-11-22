@@ -108,10 +108,17 @@ indique le fichier, la ligne, le problème, l'emplacement attendu, et son identi
 | `menus-entree-native config > <classe>` | Entrée de menu dans le secteur Configuration : les réglages passent par `config_page` |
 | `page-entete <front/page.php>` | Page qui affiche un écran GLPI (`Html::footer()`, `->display()`, `Search::show()`…) sans `Html::header()` ni en-tête équivalent. Ne comptent pas : téléchargements et pages autonomes (`header('Content-Type: …')`), pages du cœur incluses |
 | `entete-secteur <front/page.php>` | `Html::header(…, <secteur>, <classe>)` incohérent avec le menu : secteur où le plugin n'a pas d'entrée (hors `config`), ou classe d'une entrée de menu déclarée dans un autre secteur (fil d'Ariane et menu actif faux) |
+| `rubrique-onglets <déclaration>` | Plus de 7 sous-pages dans une rubrique (issue #34) : fonctions `sections()`, `screens()`, `tabs()`, `subPages()` qui renvoient un tableau (rubrique => liste de sous-pages, la rubrique comptant pour un onglet, ou liste des écrans d'une barre), clé `'pages' => [...]` |
+| `module-inactif <Classe>::<méthode>` | Classe d'un module activable (`isEnabled()`, `isModuleEnabled()`, `isFrameworkEnabled()`, `isFeatureEnabled()`) dont `getTabNameForItem()` ou `getMenuContent()` ne consulte pas l'activation : onglet ou entrée affichés pour un module désactivé |
+| `config-version <page>` | Page de configuration sans l'encadré « Version du plugin » (composant `templates/_plugin_version.html.twig` de [glpi-plugin-template](https://github.com/parime/glpi-plugin-template), ou classe `PluginVersion…`) |
+
+Les trois derniers suivent leur propre mode, `tabs-mode` (comme les barres d'onglets du parcours des
+pages) : un plugin peut garder le reste bloquant pendant la refonte de ses rubriques.
 
 Fichiers lus pour la page de configuration : le fichier du hook `config_page`, les pages `front/`
 rangées dans Configuration > Plugins (`Html::header(…, 'config', 'plugin')` ou `Plugin::class`), les
-templates qu'elles affichent et incluent, les classes du plugin dont le nom contient `Config`, les
+templates qu'elles affichent et incluent, les blocs de réglages découverts par fichier
+(`src/Config/**/*.php` et `templates/config/**/*.twig`, comme les blocs de GRC), les classes du plugin dont le nom contient `Config`, les
 objets qu'une sous-page de réglages crée (`new Connection()`) et le corps des méthodes `config*()`
 appelées (`EndOfLife::configData()`). Les exceptions de menu sont celles du contrôle dans un vrai
 GLPI : `menus-secteur-metier` (le secteur propre d'un outil métier complet compte pour une entrée)
@@ -125,6 +132,7 @@ dans son issue de navigation ouverte, passe le contrôle en avertissement dans s
     with:
       plugin-key: monplugin
       navigation-mode: warning   # jusqu'à la fermeture de parime/monplugin#NN (navigation)
+      tabs-mode: warning         # rubriques, modules, encadré de version et barres d'onglets (#34)
 ```
 
 Les écarts deviennent des annotations `::warning::` et le job ne bloque pas. À la fermeture de
@@ -139,7 +147,7 @@ l'issue, la PR qui la ferme retire la ligne : le contrôle redevient bloquant (`
 | Inventaire Docker | glpi-docker-inventory#118 | 13 : 7 lectures « … maintenant », 6 liens vers les écrans d'usage |
 | FinOps (dev) | glpi-finops#37 | 2 liens (coûts, inventaire Sangfor) |
 
-Lancement local, depuis le dossier du plugin : `php <glpi-plugin-security>/checks/check-navigation.php . [error|warning]`
+Lancement local, depuis le dossier du plugin : `php <glpi-plugin-security>/checks/check-navigation.php . [navigation-mode] [tabs-mode]`
 
 ### Archive publiée (`checks/check-archive.sh`)
 
@@ -317,6 +325,17 @@ demandés comme le fait GLPI. Anomalies, avec leur identifiant :
 | `orphan` | Écran du plugin (`front/`, 200 dans la mise en page de GLPI pour l'administrateur) qu'aucun menu ne permet d'atteindre, même par des liens successifs. Formulaires et actions (`.form.php`, `.export.php`, `.csv.php`…) exclus |
 | `axe:<règle>` | Violation d'accessibilité grave (axe-core 4.10.3, impact `critical` ou `serious`, WCAG 2.1 A et AA : contrastes, libellés de formulaires, rôles, textes de remplacement) dans le contenu de la page (`main#page`), hors violations déjà présentes sur les pages du cœur (accueil, ordinateurs, plugins) |
 | `perf` | Temps de réponse du serveur (requête envoyée, premier octet reçu) au-delà de `pages-max-ms` (3000 ms par défaut, `0` pour ne pas mesurer). Les cinq pages les plus lentes de chaque compte sont affichées |
+| `onglets-nombre` | Plus de 7 onglets visibles dans une barre d'un écran du plugin (issue #34) |
+| `onglets-lignes` | Barre d'onglets sur plusieurs lignes à 1280 px de large |
+| `onglets-role` | Barre sans `role="tablist"`, ou onglet sans `role="tab"` |
+| `onglets-clavier` | Le focus ne passe pas du premier onglet au suivant au clavier (Tab ou flèche droite) |
+| `onglet-refuse` | Onglet vers une page refusée (403) au compte qui le voit : un onglet que le profil ne peut pas ouvrir ne s'affiche pas |
+| `onglet-inactif` | Onglet vers une page qui annonce un module, une fonction ou un référentiel désactivé |
+
+Barres d'onglets contrôlées : `role="tablist"`, `.nav-tabs`, `.nav-pills` du contenu des écrans
+`front/` du plugin, hors onglets des fiches du cœur (`data-glpi-ajax-content`, comptés par GLPI).
+Ces six anomalies suivent leur propre mode, `tabs-mode` (le même que les rubriques du contrôle
+statique), indépendant de `pages-mode`.
 
 Une page s'identifie par son chemin depuis le dossier du plugin (`front/x.php`), sans sa requête,
 un onglet par `tab:<classe>$<numéro>`. Exception justifiée dans `.glpi-security-exceptions`, motifs
@@ -334,6 +353,7 @@ Réglages dans le `security.yml` du plugin :
     with:
       plugin-key: monplugin
       pages-mode: warning        # le temps de l'issue de correction, comme navigation-mode
+      tabs-mode: warning         # barres d'onglets et rubriques, le temps de l'issue de navigation
       pages-max-ms: 5000
       pages-accounts: 'glpi:glpi lecteur:MotDePasse#1'   # comptes créés par seed-command
       # pages-test: false pour désactiver le job
@@ -341,8 +361,11 @@ Réglages dans le `security.yml` du plugin :
 
 Auto-test : secbad a une page en 500 (`crash.php`), un écran hors menu avec une image sans texte de
 remplacement (`hidden.php`) et sa page de configuration rangée dans Assistance (fil d'Ariane faux) ;
-secgood, la version correcte, passe. Lancement local (Docker) : `bash checks/start-glpi.sh`, puis
-`bash checks/check-pages.sh <dossier> <clé> [exceptions] [jeu de données] [error|warning] [seuil] [comptes]`
+secgood, la version correcte, passe. Depuis l'issue #34, secbad a aussi une barre de 9 onglets
+(`tabs.php`) sans rôles ARIA, sur plusieurs lignes, inatteignable au clavier, avec un onglet refusé
+au technicien et un onglet vers un module désactivé ; secgood, une barre de deux onglets correcte.
+Lancement local (Docker) : `bash checks/start-glpi.sh`, puis
+`bash checks/check-pages.sh <dossier> <clé> [exceptions] [jeu de données] [error|warning] [seuil] [comptes] [tabs-mode]`
 (`GLPI_CONTAINER` et `GLPI_DB_CONTAINER` pour d'autres noms de conteneurs, `CRAWL_WORK` pour le
 dossier de travail).
 

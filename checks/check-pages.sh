@@ -5,13 +5,14 @@
 #
 # Usage : check-pages.sh <dossier du plugin> <clé> [fichier d'exceptions] [commande de jeu de données]
 #                        [mode error|warning] [seuil en ms] [comptes « identifiant:mot-de-passe » séparés par des espaces]
+#                        [mode des barres d'onglets : error|warning, issue #34]
 #   Comptes par défaut : « glpi:glpi tech:tech » (administrateur, puis technicien sans droit
 #   d'administration). Dossier de travail : CRAWL_WORK (défaut : dossier temporaire).
 #
 # Sortie : les anomalies, puis « RESULT crawl pages=<n> anomalies=<n> » et « RESULT logs=<0|1> » ;
 # code 1 s'il reste une anomalie en mode error.
 set -uo pipefail
-DIR=$1 KEY=$2 EXCEPTIONS=${3:-} SEED=${4:-} MODE=${5:-error} MAX_MS=${6:-3000} ACCOUNTS=${7:-glpi:glpi tech:tech}
+DIR=$1 KEY=$2 EXCEPTIONS=${3:-} SEED=${4:-} MODE=${5:-error} MAX_MS=${6:-3000} ACCOUNTS=${7:-glpi:glpi tech:tech} TABS_MODE=${8:-error}
 C=${GLPI_CONTAINER:-glpisec}
 P=/var/www/glpi/plugins/$KEY
 LOGS=/var/glpi/logs
@@ -63,7 +64,7 @@ for a in $ACCOUNTS; do ACC_ARG+=(--account "$a"); done
 MSYS_NO_PATHCONV=1 docker run --rm --network "container:$C" \
   -v "$HERE:/checks:ro" -v "$(hostpath "$W"):/work" "$PLAYWRIGHT_IMAGE" \
   sh -c 'pip install --quiet --disable-pip-version-check --root-user-action=ignore playwright==1.57.0 && exec python -u /checks/crawl-pages.py "$@"' sh \
-  http://localhost --key "$KEY" --data /work/data.json --axe /work/axe.min.js --max-ms "$MAX_MS" --mode "$MODE" \
+  http://localhost --key "$KEY" --data /work/data.json --axe /work/axe.min.js --max-ms "$MAX_MS" --mode "$MODE" --tabs-mode "$TABS_MODE" \
   "${EXC_ARG[@]}" "${ACC_ARG[@]}" | tee "$W/crawl.log"
 CRAWL=${PIPESTATUS[0]}
 grep -q '^RESULT crawl' "$W/crawl.log" || { echo "::error::le parcours n'a pas abouti"; CRAWL=1; }

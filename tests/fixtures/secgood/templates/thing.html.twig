@@ -1,5 +1,11 @@
 {# SPDX-License-Identifier: GPL-3.0-or-later #}
 {# Version correcte (issue #23) : chaque écran est joignable depuis l'entrée de menu (lien vers other.php). #}
+{# Barre d'onglets de la rubrique (issue #34) : au plus 7 onglets, une ligne, rôles ARIA, clavier ;
+   text-body : contraste suffisant des onglets inactifs (axe-core color-contrast). #}
+<ul class="nav nav-tabs mb-3" role="tablist" aria-label="{{ __('Rubrique secgood', 'secgood') }}">
+  <li class="nav-item" role="presentation"><a class="nav-link text-body" role="tab" href="thing.php">{{ __('Choses', 'secgood') }}</a></li>
+  <li class="nav-item" role="presentation"><a class="nav-link text-body" role="tab" href="other.php">{{ __('Autre écran', 'secgood') }}</a></li>
+</ul>
 <div class="card">
   <div class="card-body">
     <p>{{ __('Choses du plugin', 'secgood') }}</p>
