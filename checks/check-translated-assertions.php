@@ -158,11 +158,16 @@ foreach (array_keys($texts) as $text) {
 }
 
 $exceptions = [];
-if (is_file(EXCEPTIONS)) {
-    foreach (file(EXCEPTIONS, FILE_IGNORE_NEW_LINES) ?: [] as $line) {
-        if (preg_match('/^\s*translated-assertion\s+(\S+)\s*:\s*\S/', $line, $m)) {
-            $exceptions[$m[1]] = true;
-        }
+// Fichier d'exceptions et ses fragments (EXCEPTIONS.d/*, par ordre alphabétique), même syntaxe.
+$exceptionLines = [];
+foreach (array_merge([EXCEPTIONS], glob(EXCEPTIONS . '.d/*') ?: []) as $exceptionFile) {
+    if (is_file($exceptionFile)) {
+        array_push($exceptionLines, ...(file($exceptionFile, FILE_IGNORE_NEW_LINES) ?: []));
+    }
+}
+foreach ($exceptionLines as $line) {
+    if (preg_match('/^\s*translated-assertion\s+(\S+)\s*:\s*\S/', $line, $m)) {
+        $exceptions[$m[1]] = true;
     }
 }
 

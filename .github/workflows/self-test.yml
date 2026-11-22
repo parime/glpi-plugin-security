@@ -9,6 +9,12 @@ on:
 permissions:
   contents: read
 
+# Un nouveau commit sur une pull request annule l'exécution précédente de la même PR ; les push
+# (main, étiquettes) ont chacun leur groupe (run_id) et ne sont jamais annulés.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   security-ref:
     name: Étiquette et version par défaut des contrôles
@@ -469,6 +475,78 @@ jobs:
           out=$(bash checks/check-pages.sh tests/fixtures/secgood secgood .glpi-security-exceptions) || { echo "$out"; exit 1; }
           echo "$out"
 
+  heavy-changes:
+    name: Contrôles lourds seulement si la PR les concerne (heavy-changes.sh)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+      # Dépôt jetable avec le commit de fusion qu'actions/checkout extrait pour une pull request.
+      - name: documentation seule, code, déplacement, push, motifs absents
+        run: |
+          S="$PWD/checks/heavy-changes.sh"; P='* !docs/* !changes/* !*.md'
+          d=$(mktemp -d); cd "$d"; git init -q -b main .
+          g() { git -c user.name=ci -c user.email=ci@example.org "$@"; }
+          mkdir src docs; echo a > src/a.php; echo d > docs/x.md; git add -A; g commit -qm base
+          expect() { out=$(bash "$S" . "$1" "$2"); echo "$out"; [ "$(tail -1 <<< "$out")" = "heavy=$3" ] || { echo "::error::$4 : heavy=$3 attendu"; exit 1; }; }
+          git checkout -q -b doc; echo e >> docs/x.md; echo r > README.md; git add -A; g commit -qm doc
+          git checkout -q main; g merge -q --no-ff doc -m merge
+          expect pull_request "$P" false "PR de documentation seule"
+          expect push "$P" true "push sur main ou dev"
+          expect workflow_dispatch "$P" true "lancement manuel"
+          expect pull_request "" true "heavy-paths absent"
+          expect pull_request "templates/ *.php" false "liste d'inclusion sans fichier concerné"
+          git reset -q --hard HEAD^1
+          expect pull_request "$P" true "commit sans second parent"
+          git checkout -q -b mv; git mv src/a.php docs/a.md; g commit -qm mv
+          git checkout -q main; g merge -q --no-ff mv -m merge
+          expect pull_request "$P" true "fichier PHP déplacé dans docs/"
+          expect pull_request "*.php" true "liste d'inclusion, fichier PHP supprimé"
+          expect pull_request "docs/" true "dossier terminé par /"
+          expect pull_request "* !docs/*" true "suppression de src/a.php"
+
+  exceptions-fragments:
+    name: Exceptions en fragments (.glpi-security-exceptions.d)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+      - name: fichier racine et fragments lus, raison toujours exigée
+        run: |
+          d=$(mktemp -d); mkdir "$d/.glpi-security-exceptions.d"
+          printf 'gitleaks racine:1 : dans le fichier racine\n' > "$d/.glpi-security-exceptions"
+          printf '# commentaire\ngitleaks lot-a:1 : fragment du lot A' > "$d/.glpi-security-exceptions.d/lot-a"
+          printf 'trivy CVE-0000-0001 : fragment du lot B\n' > "$d/.glpi-security-exceptions.d/lot-b"
+          got=$(bash checks/security-exceptions.sh "$d/.glpi-security-exceptions" gitleaks | tr '\n' ' ')
+          [ "$got" = "racine:1 lot-a:1 " ] || { echo "::error::exceptions gitleaks lues : « $got »"; exit 1; }
+          rm "$d/.glpi-security-exceptions"
+          got=$(bash checks/security-exceptions.sh "$d/.glpi-security-exceptions" trivy)
+          [ "$got" = "CVE-0000-0001" ] || { echo "::error::fragments seuls, sans fichier racine : « $got »"; exit 1; }
+          printf 'trivy CVE-0000-0002\n' > "$d/.glpi-security-exceptions.d/sans-raison"
+          if bash checks/security-exceptions.sh "$d/.glpi-security-exceptions" trivy; then
+            echo "::error::une exception sans raison dans un fragment doit être refusée"; exit 1
+          fi
+      - name: secbad passe au contrôle d'ergonomie avec ses exceptions en fragments seulement
+        run: |
+          d=$(mktemp -d); cp -r tests/fixtures/secbad/. "$d"; mkdir "$d/.glpi-security-exceptions.d"
+          { php checks/check-navigation.php "$d" || true; } | sed -n 's/^::error.*\[\(.*\)\]$/\1 : exception de test/p' > "$RUNNER_TEMP/all"
+          [ -s "$RUNNER_TEMP/all" ] || { echo "::error::aucun écart de secbad"; exit 1; }
+          split -l 3 "$RUNNER_TEMP/all" "$d/.glpi-security-exceptions.d/lot-"
+          ls "$d/.glpi-security-exceptions.d"
+          php checks/check-navigation.php "$d"
+      - name: Gitleaks, secbad passe avec l'exception dans un fragment
+        run: |
+          d=$(mktemp -d); cp -r tests/fixtures/secbad/. "$d"; mkdir "$d/.glpi-security-exceptions.d"
+          printf 'gitleaks config/secbad.ini:generic-api-key:4 : clé factice de la fixture\n' > "$d/.glpi-security-exceptions.d/secret"
+          bash checks/check-secrets.sh "$d" .glpi-security-exceptions
+      - name: un dossier de fragments publié dans l'archive est refusé
+        run: |
+          d=$(mktemp -d); cp -r tests/fixtures/archive/. "$d"; mv "$d/gitattributes-clean" "$d/.gitattributes"
+          mkdir "$d/.glpi-security-exceptions.d"; echo 'crawl perf front/x.php : lent' > "$d/.glpi-security-exceptions.d/x"
+          git -C "$d" init -q && git -C "$d" add -A
+          git -C "$d" -c user.name=ci -c user.email=ci@example.org commit -qm fixture
+          if bash checks/check-archive.sh "$d"; then
+            echo "::error::.glpi-security-exceptions.d/ doit être signalé dans l'archive"; exit 1
+          fi
+
   required-jobs:
     # Garde-fou (#37) : une résolution de conflit a fait disparaître le job « navigation » et l'entrée
     # « navigation-mode » sans qu'aucun contrôle ne le voie. Chaque job et entrée attendus doivent exister.
@@ -479,6 +557,6 @@ jobs:
       - name: Vérifie la présence des jobs et des entrées
         run: |
           f=.github/workflows/plugin-security.yml; ko=0
-          for j in semgrep translations typography colors navigation archive workflows charter entrypoints secrets dependencies codeql-languages codeql dependency-review runtime translated-assertions integration-language upgrade pages; do grep -q "^  $j:$" "$f" || { echo "::error::job « $j » absent de $f"; ko=1; }; done
-          for i in navigation-mode tabs-mode pages-mode upgrade-test integration-languages translated-assertions-mode security-ref; do grep -q "^      $i:$" "$f" || { echo "::error::entrée « $i » absente de $f"; ko=1; }; done
+          for j in changes semgrep translations typography colors navigation archive workflows charter entrypoints secrets dependencies codeql-languages codeql dependency-review runtime translated-assertions integration-language upgrade pages; do grep -q "^  $j:$" "$f" || { echo "::error::job « $j » absent de $f"; ko=1; }; done
+          for i in heavy-paths navigation-mode tabs-mode pages-mode upgrade-test integration-languages translated-assertions-mode security-ref; do grep -q "^      $i:$" "$f" || { echo "::error::entrée « $i » absente de $f"; ko=1; }; done
           exit $ko

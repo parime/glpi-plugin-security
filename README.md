@@ -14,12 +14,23 @@ Créer `.github/workflows/security.yml` dans le dépôt du plugin :
 
 ```yaml
 name: Sécurité
-on: [push, pull_request]
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+# Un nouveau commit sur une pull request annule l'exécution précédente de cette PR ; un push sur
+# main ou dev a son propre groupe (run_id) et n'est jamais annulé.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   security:
-    uses: parime/glpi-plugin-security/.github/workflows/plugin-security.yml@v1.10.3
+    uses: parime/glpi-plugin-security/.github/workflows/plugin-security.yml@v1.11.0
     with:
       plugin-key: monplugin   # nom du dossier dans plugins/ (plugin_version_monplugin)
+      # Facultatif : une PR qui ne touche que la documentation ne démarre aucun GLPI
+      # (voir « Contrôles lourds seulement quand ils servent »).
+      # heavy-paths: '* !docs/* !changes/* !*.md !*.png !*.jpg !*.svg'
       # Facultatif : jeu de données créé avant la désinstallation, pour que le contrôle des
       # restes porte sur de vraies données (dossier de GLPI, utilisateur www-data).
       # seed-command: php plugins/monplugin/tests/security/setup.php
@@ -427,6 +438,29 @@ Code security). Une exception sans raison (pas de « : ») fait échouer le job.
 Lancement local (Docker requis), depuis ce dépôt : `bash checks/check-secrets.sh <dossier> [exceptions]`,
 `bash checks/check-dependencies.sh <dossier> [exceptions]`.
 
+## Contrôles lourds seulement quand ils servent (`heavy-paths`)
+
+Les contrôles qui démarrent un vrai GLPI (« Contrôles dans un vrai GLPI », tests d'intégration en
+français, mise à jour depuis la version publiée, parcours de toutes les pages) prennent l'essentiel
+de la durée d'une pull request. Avec l'entrée `heavy-paths`, ils ne tournent que si la PR modifie un
+fichier qu'ils concernent ; sinon ils sont « skipped », ce que GitHub accepte comme réussi pour un
+contrôle exigé. Le job « Contrôles lourds nécessaires (fichiers modifiés) » affiche sa décision et
+les fichiers qui la motivent (`checks/heavy-changes.sh`).
+
+- Motifs séparés par des espaces ou des sauts de ligne, depuis la racine du dépôt ; `*` traverse
+  les dossiers (`*.php` : tout fichier PHP ; `templates/` : tout ce qui est dessous). `!motif`
+  exclut, et pour chaque fichier le dernier motif qui correspond l'emporte, comme dans `.gitignore`.
+- Forme conseillée, tout sauf la documentation, pour ne jamais oublier un type de fichier :
+  `'* !docs/* !changes/* !*.md !*.png !*.jpg !*.svg'`. Une liste d'inclusion
+  (`'*.php templates/ locales/ composer.* tests/ .github/ .glpi-security-exceptions*'`) marche aussi.
+- Un fichier déplacé compte sous son ancien et son nouveau nom (`src/a.php` vers `docs/a.md` reste
+  lourd).
+- **Tout tourne toujours** : sans `heavy-paths` (valeur par défaut), sur un push (main, dev), une
+  étiquette, un lancement manuel ou planifié, et dès que la liste des fichiers est illisible. Si le
+  job de décision échoue, les contrôles lourds tournent quand même (et le job reste rouge).
+- Pas de `paths-ignore` dans le déclencheur du workflow appelant : un workflow qui ne démarre pas
+  laisse un contrôle exigé « en attente » pour toujours.
+
 ## Exceptions justifiées
 
 Un faux positif se déclare dans `.glpi-security-exceptions`, à la racine du dépôt du plugin, une ligne
@@ -435,6 +469,15 @@ par exception, avec l'identifiant affiché par le contrôle et la raison :
 ```
 tab-content Computer/PluginMonpluginPassport$1 : contenu public par conception (droits du cœur)
 ```
+
+**Fragments** (v1.11.0) : chaque fichier du dossier `.glpi-security-exceptions.d/` est lu en plus du
+fichier racine, avec la même syntaxe (une ligne par exception, `#` pour un commentaire). Deux
+branches qui ajoutent chacune une exception créent chacune leur fichier
+(`.glpi-security-exceptions.d/<issue>-<sujet>`) et ne se mettent plus en conflit. Fichiers lus par
+ordre alphabétique, fichiers cachés ignorés ; le fichier racine reste accepté, seul ou avec les
+fragments. Le dossier s'exclut de l'archive publiée comme le fichier racine (`export-ignore` dans
+`.gitattributes`, vérifié par le contrôle de l'archive). Avec une entrée `exceptions-file` autre,
+le dossier est `<ce fichier>.d/`.
 
 Une assertion de test sur un libellé traduit : `translated-assertion <fichier>::<méthode> : raison`
 (voir plus haut).

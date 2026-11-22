@@ -1,0 +1,29 @@
+# Journal des versions
+
+Les versions antérieures à v1.11.0 sont décrites dans les
+[publications GitHub](https://github.com/parime/glpi-plugin-security/releases) du dépôt.
+
+## v1.11.0
+
+### Ajouté
+- Entrée facultative `heavy-paths` du workflow commun : les contrôles qui démarrent un vrai GLPI
+  (« Contrôles dans un vrai GLPI », tests d'intégration en français, mise à jour depuis la version
+  publiée, parcours de toutes les pages) ne tournent sur une pull request que si elle modifie un
+  fichier concerné ; sinon ils sont « skipped ». Nouveau job « Contrôles lourds nécessaires
+  (fichiers modifiés) » et script `checks/heavy-changes.sh`. Sans l'entrée, sur un push, une
+  étiquette ou un lancement manuel, ou en cas de doute : tout tourne, comme avant.
+- Exceptions en fragments : chaque fichier de `.glpi-security-exceptions.d/` est lu en plus de
+  `.glpi-security-exceptions`, même syntaxe (`checks/exceptions-cat.sh`), par tous les contrôles
+  (Gitleaks, Trivy, Dependency Review, CodeQL, onglets et notifications, mise à jour, parcours des
+  pages, ergonomie, couleurs, libellés traduits). Le fichier racine reste accepté.
+- README : groupe `concurrency` conseillé dans le workflow appelant (un nouveau commit sur une PR
+  annule l'exécution précédente, jamais sur un push).
+
+### Modifié
+- Contrôle de l'archive : `.glpi-security-exceptions.d/` est un fichier de développement, à exclure
+  avec `export-ignore` comme le fichier racine.
+- Auto-test : exécutions dépassées d'une PR annulées ; cas de `heavy-changes.sh` (documentation
+  seule, code, fichier déplacé, push, entrée absente) et des fragments d'exceptions.
+
+### Corrigé
+- Trivy : une panne de téléchargement de l'image est distinguée d'une vulnérabilité (#41).

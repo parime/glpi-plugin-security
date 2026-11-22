@@ -20,8 +20,11 @@ docker exec -u root "$C" rm -rf "$P"
 docker cp "$DIR/." "$C:$P"
 docker cp "$HERE/glpi-runtime-checks.php" "$C":/tmp/glpi-runtime-checks.php
 EXC_ARG=()
-if [ -n "$EXCEPTIONS" ] && [ -f "$DIR/$EXCEPTIONS" ]; then
-  docker cp "$DIR/$EXCEPTIONS" "$C":/tmp/glpi-security-exceptions
+# Fichier d'exceptions et ses fragments (.glpi-security-exceptions.d/*), réunis en un seul fichier.
+if [ -n "$EXCEPTIONS" ] && { [ -f "$DIR/$EXCEPTIONS" ] || [ -d "$DIR/$EXCEPTIONS.d" ]; }; then
+  EXC_ALL=$(mktemp) && chmod 644 "$EXC_ALL"
+  bash "$HERE/exceptions-cat.sh" "$DIR/$EXCEPTIONS" > "$EXC_ALL"
+  docker cp "$EXC_ALL" "$C":/tmp/glpi-security-exceptions
   EXC_ARG=(/tmp/glpi-security-exceptions)
 fi
 # docker cp crée les fichiers au nom de root : les rendre à www-data avant composer et GLPI.

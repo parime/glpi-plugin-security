@@ -19,8 +19,8 @@ dir=$(cd "$dir" && pwd) || exit 2
 
 ignore=$(mktemp)
 trap 'rm -f "$ignore"' EXIT
-# Chemin relatif au dossier du plugin (.glpi-security-exceptions), ou chemin quelconque.
-[ -n "$exceptions" ] && [ -f "$dir/$exceptions" ] && exceptions="$dir/$exceptions"
+# Chemin relatif au dossier du plugin (.glpi-security-exceptions et ses fragments .d/), ou chemin quelconque.
+[ -n "$exceptions" ] && { [ -f "$dir/$exceptions" ] || [ -d "$dir/$exceptions.d" ]; } && exceptions="$dir/$exceptions"
 bash "$here/security-exceptions.sh" "$exceptions" gitleaks > "$ignore" || exit 1
 chmod 644 "$ignore"
 if [ -s "$ignore" ]; then

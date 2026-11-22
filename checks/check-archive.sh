@@ -11,7 +11,7 @@ DIR=${1:-.}
 
 # Racine du dépôt : outillage de développement, de test, d'analyse ou de CI.
 # Dossiers (tout leur contenu) puis fichiers.
-FORBIDDEN='^(tests|\.github|\.semgrep|\.phpstan[^/]*|node_modules|\.vscode|\.idea|\.devcontainer)/'
+FORBIDDEN='^(tests|\.github|\.glpi-security-exceptions\.d|\.semgrep|\.phpstan[^/]*|node_modules|\.vscode|\.idea|\.devcontainer)/'
 FORBIDDEN+='|^(phpstan[^/]*|\.phpstan-bootstrap\.php|phpunit[^/]*|\.phpunit[^/]*|\.php-cs-fixer[^/]*|\.php_cs[^/]*'
 FORBIDDEN+='|phpcs\.xml[^/]*|psalm\.xml[^/]*|rector\.php|infection\.json[^/]*|\.editorconfig|\.yamllint[^/]*'
 FORBIDDEN+='|\.gitignore|\.gitattributes|\.glpi-security-exceptions|docker-compose[^/]*|Dockerfile|\.dockerignore'
