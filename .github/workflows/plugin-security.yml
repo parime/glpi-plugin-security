@@ -41,7 +41,7 @@ on:
         required: false
         type: string
         # À passer à la nouvelle étiquette dans le commit étiqueté (contrôlé par self-test.yml).
-        default: v1.10.1
+        default: v1.10.2
       charter-mode:
         description: "Charte commune : error (bloquant, par défaut depuis v1.9.0) ou warning (avertissements)"
         required: false
@@ -82,6 +82,11 @@ on:
         required: false
         type: string
         default: ''
+      navigation-mode:
+        description: "Ergonomie (réglages, menus, en-têtes) : error (bloquant, par défaut) ou warning, le temps de l'issue de navigation du plugin"
+        required: false
+        type: string
+        default: error
       pages-test:
         description: "Parcours de toutes les pages du plugin (false pour le désactiver)"
         required: false
@@ -176,6 +181,24 @@ jobs:
       # définie par une feuille CSS du plugin, sinon le badge s'affiche sans fond.
       - name: bg-X-subtle / text-X-emphasis / border-X-subtle de thème ou définies par le plugin
         run: php .glpi-plugin-security/checks/check-subtle-colors.php .
+
+  navigation:
+    name: Ergonomie (réglages, menus, fil d'Ariane)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+        with:
+          repository: parime/glpi-plugin-security
+          ref: ${{ inputs.security-ref }}
+          path: .glpi-plugin-security
+      # Issue #22 (charte section 9) : rien de l'exploitation dans la page de configuration, une
+      # entrée de menu par secteur et aucune dans Configuration, Html::header() cohérent avec le menu.
+      # navigation-mode: warning le temps de l'issue de navigation ouverte du plugin.
+      - name: Page de configuration sans exploitation, menus, en-têtes des pages
+        env:
+          MODE: ${{ inputs.navigation-mode }}
+        run: php .glpi-plugin-security/checks/check-navigation.php . "$MODE"
 
   archive:
     name: Archive de release sans fichier de développement

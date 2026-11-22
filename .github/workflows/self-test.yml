@@ -453,3 +453,17 @@ jobs:
         run: |
           out=$(bash checks/check-pages.sh tests/fixtures/secgood secgood .glpi-security-exceptions) || { echo "$out"; exit 1; }
           echo "$out"
+
+  required-jobs:
+    # Garde-fou (#37) : une résolution de conflit a fait disparaître le job « navigation » et l'entrée
+    # « navigation-mode » sans qu'aucun contrôle ne le voie. Chaque job et entrée attendus doivent exister.
+    name: Jobs et entrées attendus du workflow commun
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+      - name: Vérifie la présence des jobs et des entrées
+        run: |
+          f=.github/workflows/plugin-security.yml; ko=0
+          for j in semgrep translations typography colors navigation archive workflows charter entrypoints secrets dependencies codeql-languages codeql dependency-review runtime translated-assertions integration-language upgrade pages; do grep -q "^  $j:$" "$f" || { echo "::error::job « $j » absent de $f"; ko=1; }; done
+          for i in navigation-mode pages-mode upgrade-test integration-languages translated-assertions-mode security-ref; do grep -q "^      $i:$" "$f" || { echo "::error::entrée « $i » absente de $f"; ko=1; }; done
+          exit $ko
