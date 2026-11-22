@@ -1,0 +1,1 @@
+translated-assertion tests/Unit/LabelTest.php::testFrenchTranslation : langue forcée en fr_FR dans le test, c'est la traduction qui est testée
