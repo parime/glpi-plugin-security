@@ -30,16 +30,21 @@ W=$(mktemp -d)
 
 sql() { docker exec -i "$DB" mariadb -uroot -pglpi "$@"; }
 console() { docker exec -u www-data "$C" sh -c "cd /var/www/glpi && php bin/console $*"; }
-# Copie un plugin dans le conteneur (dossier vidé d'abord, comme une mise à jour par l'archive :
-# sinon les fichiers de l'ancienne version resteraient à côté des nouveaux).
+# Copie un plugin dans le conteneur, comme une mise à jour par l'archive : dossier remplacé en entier
+# (sinon les fichiers de l'ancienne version resteraient à côté des nouveaux). Préparé à côté
+# (dépendances comprises), puis mis en place d'un coup : la tâche cron du conteneur ne voit jamais
+# un plugin à moitié copié (sinon GLPI le désactive : « prerequisites are not matched »).
+STAGE=/var/www/glpi/.upgrade-stage/$KEY
 deploy() {
-  docker exec -u root "$C" rm -rf "$P"
-  docker cp "$1/." "$C:$P"
-  docker exec -u root "$C" chown -R www-data:www-data "$P" /var/glpi/files
-  if docker exec "$C" test -f "$P/composer.json" && ! docker exec "$C" test -f "$P/vendor/autoload.php"; then
-    docker exec -u www-data "$C" sh -c "cd $P && COMPOSER_HOME=/tmp/composer-home php /tmp/composer.phar install --no-dev --no-interaction --quiet" \
-      || { echo "::error::composer install a échoué ($1)"; return 1; }
+  docker exec -u root "$C" sh -c "rm -rf $STAGE && mkdir -p $(dirname "$STAGE")"
+  docker cp "$1/." "$C:$STAGE"
+  # Fichiers datés de maintenant : docker cp garde les dates d'origine, et l'OPcache (qui compare les
+  # dates) servirait encore l'ancienne version d'un fichier daté pareil.
+  docker exec -u root "$C" sh -c "find $STAGE -exec touch {} + && chown -R www-data:www-data $STAGE /var/glpi/files"
+  if docker exec "$C" test -f "$STAGE/composer.json" && ! docker exec "$C" test -f "$STAGE/vendor/autoload.php"; then
+    docker exec -u www-data "$C" sh -c "cd $STAGE && COMPOSER_HOME=/tmp/composer-home php /tmp/composer.phar install --no-dev --no-interaction --quiet"       || { echo "::error::composer install a échoué ($1)"; return 1; }
   fi
+  docker exec -u root "$C" sh -c "rm -rf $P && mv $STAGE $P && rmdir $(dirname "$STAGE")"
 }
 snapshot() { docker exec -u www-data "$C" php /tmp/glpi-upgrade-checks.php snapshot "$KEY" "/tmp/upgrade-$1.json"; }
 # Base remise à son état d'avant le plugin : installation neuve et mise à jour partent du même GLPI.
