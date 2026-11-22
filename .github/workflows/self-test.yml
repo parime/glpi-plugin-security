@@ -201,3 +201,59 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
       - run: shellcheck checks/*.sh
+
+  translated-assertions:
+    name: Contrôle des assertions sur un libellé traduit (secbad échoue, secgood passe)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+      # secbad : sprintf(__()), __() dans un « contient », msgid anglais attendu, traduction
+      # française attendue dans un tableau ; secgood : clés, nombres, chaînes passées à une fonction
+      # ou concaténées, et une exception justifiée.
+      - name: secbad doit échouer sur les quatre défauts
+        run: |
+          out=$(php checks/check-translated-assertions.php tests/fixtures/secbad) \
+            && { echo "$out"; echo "::error::le contrôle ne détecte plus les assertions de secbad"; exit 1; }
+          echo "$out"
+          for line in 9 10 11 12; do
+            grep -qF "::error file=tests/Unit/LabelTest.php,line=$line::" <<< "$out" \
+              || { echo "::error::assertion de la ligne $line de secbad non signalée"; exit 1; }
+          done
+          [ "$(grep -c '^::error' <<< "$out")" = 4 ] || { echo "::error::nombre d'écarts de secbad inattendu"; exit 1; }
+      - name: secbad n'échoue pas en mode avertissement, mais avertit
+        run: |
+          out=$(php checks/check-translated-assertions.php tests/fixtures/secbad warning) \
+            || { echo "$out"; echo "::error::le mode avertissement ne doit pas faire échouer"; exit 1; }
+          [ "$(grep -c '^::warning' <<< "$out")" = 4 ] || { echo "$out"; echo "::error::avertissements attendus"; exit 1; }
+      - name: secgood doit passer (une exception justifiée)
+        run: |
+          out=$(php checks/check-translated-assertions.php tests/fixtures/secgood) || { echo "$out"; exit 1; }
+          echo "$out"
+          grep -q "1 exception(s) justifiée(s)" <<< "$out" || { echo "::error::exception de secgood non lue"; exit 1; }
+
+  integration-language:
+    name: Passe des tests d'intégration en français (secbad échoue, secgood passe)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+      - run: bash checks/start-glpi.sh
+      # La sonde de secgood vérifie la langue de la session, de l'instance et de l'utilisateur glpi,
+      # et que __() traduit ; le test de secbad attend le libellé anglais.
+      - name: secgood passe en fr_FR et en en_GB (langue réglée partout)
+        run: |
+          bash checks/run-integration-tests.sh tests/fixtures/secgood secgood fr_FR "php tests/language-probe.php"
+          bash checks/run-integration-tests.sh tests/fixtures/secgood secgood en_GB "php tests/language-probe.php"
+      - name: le test dépendant de la langue de secbad passe en en_GB et échoue en fr_FR
+        run: |
+          bash checks/run-integration-tests.sh tests/fixtures/secbad secbad en_GB "php tests/language-dependent.php" \
+            || { echo "::error::le test de secbad doit passer en anglais"; exit 1; }
+          if bash checks/run-integration-tests.sh tests/fixtures/secbad secbad fr_FR "php tests/language-dependent.php"; then
+            echo "::error::la passe en français ne détecte plus le test dépendant de la langue de secbad"; exit 1
+          fi
+      - name: sans suite d'intégration, avertissement sans échec
+        run: |
+          out=$(bash checks/run-integration-tests.sh tests/fixtures/secgood secgood fr_FR) || { echo "$out"; exit 1; }
+          grep -q "::warning::aucune suite d'intégration" <<< "$out" || { echo "$out"; echo "::error::avertissement attendu"; exit 1; }
+      - name: Journal GLPI (en cas d'échec)
+        if: failure()
+        run: docker logs glpisec --tail 200

@@ -52,6 +52,21 @@ on:
         required: false
         type: string
         default: tests/security/access-matrix.sh
+      translated-assertions-mode:
+        description: "Assertions de test qui comparent un libellé traduit : warning (annotations, par défaut) ou error (bloquant)"
+        required: false
+        type: string
+        default: warning
+      integration-languages:
+        description: "Langues de la passe des tests d'intégration du plugin, en JSON ; [] pour ne pas la lancer"
+        required: false
+        type: string
+        default: '["fr_FR"]'
+      integration-command:
+        description: "Commande des tests d'intégration, dans le dossier du plugin (vide : phpunit-integration.xml.dist ou suite integration de phpunit.xml)"
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -210,6 +225,56 @@ jobs:
           EXCEPTIONS: ${{ inputs.exceptions-file }}
           SEED: ${{ inputs.seed-command }}
         run: bash security/checks/check-plugin.sh plugin "$PLUGIN_KEY" "$EXCEPTIONS" "$SEED"
+      - name: Journal GLPI (en cas d'échec)
+        if: failure()
+        run: docker logs glpisec --tail 200
+
+  translated-assertions:
+    name: Assertions de test sans libellé traduit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+        with:
+          repository: parime/glpi-plugin-security
+          ref: ${{ inputs.security-ref }}
+          path: .glpi-plugin-security
+      # Issue #26 : la CI tourne en anglais, l'instance de développement en français. Une
+      # assertion qui attend un libellé traduit (__(), sprintf(__()), texte des locales/) passe
+      # dans une langue et échoue dans l'autre.
+      - name: assertSame / assertEquals / assertStringContainsString sur un libellé traduit
+        env:
+          MODE: ${{ inputs.translated-assertions-mode }}
+        run: php .glpi-plugin-security/checks/check-translated-assertions.php . "$MODE"
+
+  integration-language:
+    name: Tests d'intégration en ${{ matrix.language }}
+    if: inputs.integration-languages != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ${{ fromJSON(inputs.integration-languages) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+        with:
+          path: plugin
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+        with:
+          repository: parime/glpi-plugin-security
+          ref: ${{ inputs.security-ref }}
+          path: security
+      - name: Démarre GLPI
+        run: bash security/checks/start-glpi.sh "${{ inputs.glpi-image }}"
+      # Issue #26 : en plus de la CI du plugin (en anglais), la même suite avec la langue réglée
+      # pour l'instance et pour les utilisateurs, comme sur l'instance de développement.
+      - name: Suite d'intégration du plugin, instance et utilisateurs en ${{ matrix.language }}
+        env:
+          PLUGIN_KEY: ${{ inputs.plugin-key }}
+          LANGUAGE_CODE: ${{ matrix.language }}
+          COMMAND: ${{ inputs.integration-command }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash security/checks/run-integration-tests.sh plugin "$PLUGIN_KEY" "$LANGUAGE_CODE" "$COMMAND"
       - name: Journal GLPI (en cas d'échec)
         if: failure()
         run: docker logs glpisec --tail 200
