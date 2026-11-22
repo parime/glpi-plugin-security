@@ -17,3 +17,6 @@ msgstr "Élément ##user.password##"
 
 msgid "Done"
 msgstr "Fait&#60;script&#62;"
+
+msgid "Risk register"
+msgstr "Registre des risques"

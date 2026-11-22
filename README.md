@@ -157,6 +157,69 @@ plus du tout : la CI du plugin se tait au lieu d'échouer, et les PR paraissent 
 #295) ; un nom qui contient « : » s'écrit entre guillemets. Les remarques de style des scripts shell
 (shellcheck) ne bloquent pas.
 
+### Libellés traduits dans les tests (`checks/check-translated-assertions.php`)
+
+La CI des plugins tourne en anglais, l'instance de développement en français : un test qui attend
+un libellé d'interface passe dans une langue et échoue dans l'autre (au moins cinq cas, dont
+GRC PR #256 avec un titre construit par `sprintf(__())`). Le contrôle lit les fichiers PHP de
+`tests/` et signale chaque `assertSame`, `assertEquals`, `assertNotSame`, `assertNotEquals`,
+`assertStringContainsString`, `assertStringNotContainsString`, `assertStringStartsWith`,
+`assertStringEndsWith` ou `assertContains` :
+
+- dont un argument appelle une fonction de traduction (`__()`, `_n()`, `_x()`, `_nx()`, `__s()`,
+  `_sx()`, `_sn()`), y compris dans `sprintf(__(...))` ;
+- ou dont la valeur attendue (le premier argument, ou un élément d'un tableau écrit tel quel) est
+  un texte d'interface du plugin qui change avec la langue : msgid de `locales/` (avec ses `%s` et
+  `%d`), ou sa traduction française (`fr_*`) ou anglaise (`en_*`). Un texte identique dans les deux
+  langues n'est pas retenu, ni un mot anglais écrit comme un identifiant (`critical`, `Computer`),
+  ni une chaîne passée à une fonction (`strtotime('+15 days')`) ou concaténée à une variable.
+
+Correction : comparer un identifiant, une clé, un code ou un nombre plutôt qu'un libellé ; quand
+c'est la traduction elle-même qui est testée, forcer la langue dans le test, la restaurer, et
+déclarer l'exception. Faux positif ou cas voulu, une ligne dans `.glpi-security-exceptions`, pour
+une méthode de test ou pour tout un fichier :
+
+```
+translated-assertion tests/Integration/RiskTest.php::testFrenchTitle : langue forcée en fr_FR, c'est la traduction qui est testée
+translated-assertion tests/Unit/CatalogFrTest.php : catalogue écrit en français quelle que soit la langue
+```
+
+En **avertissement par défaut** (annotations sans échec), le temps de corriger les plugins : au
+22/11/2026, 69 cas dans GRC Manager, 12 dans Configuration GLPI Auto, 97 dans AssetSign, aucun dans
+Docker Inventory et FinOps. Un plugin corrigé le rend bloquant avec
+`translated-assertions-mode: error`. Lancement local, depuis le dossier du plugin :
+`php <glpi-plugin-security>/checks/check-translated-assertions.php . [error|warning]`.
+
+### Tests d'intégration en français (`checks/run-integration-tests.sh`)
+
+En plus des tests de la CI du plugin (en anglais), le job « Tests d'intégration en fr_FR » relance
+sa suite d'intégration dans un GLPI dont la langue est `fr_FR` pour l'instance (configuration
+`language`, suivie par toute session sans langue propre) **et** pour chaque utilisateur existant
+(glpi, tech, normal, post-only), comme sur l'instance de développement. Étapes : `.mo` compilés
+s'ils ne sont pas versionnés (`tools/build_locales.py` s'il existe, sinon `msgfmt`), dépendances
+de production, installation et activation du plugin, langue, dépendances de développement, puis la
+suite, lancée dans le dossier du plugin par www-data avec `GLPI_ROOT_DIR=/var/www/glpi` et
+`GLPI_TEST_LANGUAGE=fr_FR`. La suite est détectée :
+
+| Fichier du plugin | Commande |
+|---|---|
+| `phpunit-integration.xml(.dist)` | `php vendor/bin/phpunit -c phpunit-integration.xml.dist` |
+| `phpunit.xml(.dist)` avec une suite `integration` | `php vendor/bin/phpunit -c phpunit.xml --testsuite integration` |
+| `phpunit.xml(.dist)` sans cette suite | `php vendor/bin/phpunit -c phpunit.xml` |
+| aucun | avertissement, pas d'échec |
+
+Réglages dans le `security.yml` du plugin :
+
+```yaml
+    with:
+      plugin-key: monplugin
+      integration-command: php vendor/bin/phpunit -c phpunit.xml --testsuite integration  # facultatif
+      integration-languages: '["fr_FR", "de_DE"]'   # défaut ["fr_FR"] ; '[]' pour ne pas lancer la passe
+```
+
+Lancement local : `bash checks/start-glpi.sh`, puis
+`bash checks/run-integration-tests.sh <dossier du plugin> <clé> fr_FR [commande]`.
+
 ### Contrôles dans un vrai GLPI (`checks/`)
 
 Le plugin est installé dans le GLPI officiel (11.0.11 par défaut), puis :
@@ -290,6 +353,9 @@ par exception, avec l'identifiant affiché par le contrôle et la raison :
 ```
 tab-content Computer/PluginMonpluginPassport$1 : contenu public par conception (droits du cœur)
 ```
+
+Une assertion de test sur un libellé traduit : `translated-assertion <fichier>::<méthode> : raison`
+(voir plus haut).
 
 Pour Semgrep, `// nosemgrep: <id de la règle>` sur la ligne, avec un commentaire qui justifie.
 
