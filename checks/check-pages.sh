@@ -53,8 +53,9 @@ if [ "$(sha256sum "$W/axe.min.js" 2>/dev/null | cut -d' ' -f1)" != "$AXE_SHA256"
   [ "$(sha256sum "$W/axe.min.js" | cut -d' ' -f1)" = "$AXE_SHA256" ] || { echo "::error::empreinte d'axe-core inattendue"; exit 1; }
 fi
 EXC_ARG=()
-if [ -n "$EXCEPTIONS" ] && [ -f "$DIR/$EXCEPTIONS" ]; then
-  cp "$DIR/$EXCEPTIONS" "$W/exceptions"
+# Fichier d'exceptions et ses fragments (.glpi-security-exceptions.d/*), réunis en un seul fichier.
+if [ -n "$EXCEPTIONS" ] && { [ -f "$DIR/$EXCEPTIONS" ] || [ -d "$DIR/$EXCEPTIONS.d" ]; }; then
+  bash "$(dirname "$0")/exceptions-cat.sh" "$DIR/$EXCEPTIONS" > "$W/exceptions"
   EXC_ARG=(--exceptions /work/exceptions)
 fi
 ACC_ARG=()

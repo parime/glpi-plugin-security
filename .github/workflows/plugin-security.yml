@@ -10,6 +10,7 @@
 #       with:
 #         plugin-key: monplugin            # nom du dossier du plugin dans plugins/
 #         # seed-command: php plugins/monplugin/tests/security/setup.php   (facultatif)
+#         # heavy-paths: '* !docs/* !*.md'   (facultatif : PR de documentation sans vrai GLPI)
 #
 # Voir README.md : ce que chaque contrôle vérifie, et le fichier d'exceptions justifiées.
 name: Contrôles de sécurité des plugins GLPI
@@ -36,12 +37,17 @@ on:
         required: false
         type: string
         default: .glpi-security-exceptions
+      heavy-paths:
+        description: "Fichiers qui justifient les contrôles lourds d'une pull request (vrai GLPI : onglets et notifications, intégration, mise à jour, parcours des pages), motifs séparés par des espaces ou des sauts de ligne, « !motif » exclut, le dernier l'emporte (checks/heavy-changes.sh). Vide (par défaut) : ils tournent toujours"
+        required: false
+        type: string
+        default: ''
       security-ref:
         description: Version des règles et contrôles communs (étiquette de parime/glpi-plugin-security)
         required: false
         type: string
         # À passer à la nouvelle étiquette dans le commit étiqueté (contrôlé par self-test.yml).
-        default: v1.10.3
+        default: v1.11.0
       charter-mode:
         description: "Charte commune : error (bloquant, par défaut depuis v1.9.0) ou warning (avertissements)"
         required: false
@@ -122,6 +128,32 @@ permissions:
   contents: read
 
 jobs:
+  # Contrôles lourds seulement s'ils sont utiles : une pull request qui ne touche que des fichiers hors
+  # heavy-paths (documentation...) ne démarre aucun GLPI. Push, étiquette, lancement manuel, entrée
+  # absente ou doute : tout tourne. Les jobs lourds ne sautent que sur heavy=false explicite.
+  changes:
+    name: Contrôles lourds nécessaires (fichiers modifiés)
+    runs-on: ubuntu-latest
+    outputs:
+      heavy: ${{ steps.heavy.outputs.heavy }}
+    steps:
+      # Commit de fusion de la PR et son premier parent (la base à jour) : fetch-depth 2 suffit.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+        with:
+          path: plugin
+          fetch-depth: 2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+        with:
+          repository: parime/glpi-plugin-security
+          ref: ${{ inputs.security-ref }}
+          path: security
+      - name: Fichiers de la pull request comparés à heavy-paths
+        id: heavy
+        env:
+          EVENT: ${{ github.event_name }}
+          HEAVY_PATHS: ${{ inputs.heavy-paths }}
+        run: bash security/checks/heavy-changes.sh plugin "$EVENT"
+
   semgrep:
     name: Règles Semgrep communes (GLPI)
     runs-on: ubuntu-latest
@@ -402,6 +434,8 @@ jobs:
 
   runtime:
     name: Contrôles dans un vrai GLPI (onglets, notifications, désinstallation)
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.heavy != 'false' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
@@ -444,7 +478,8 @@ jobs:
 
   integration-language:
     name: Tests d'intégration en ${{ matrix.language }}
-    if: inputs.integration-languages != '[]'
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.heavy != 'false' && inputs.integration-languages != '[]' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -479,7 +514,8 @@ jobs:
     # Version publiée installée et remplie, remplacée par le code de la PR, puis comparée à une
     # installation neuve de ce code (voir README, « Mise à jour depuis la version publiée »).
     name: Mise à jour depuis la version publiée (${{ matrix.glpi-image }})
-    if: inputs.upgrade-test
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.heavy != 'false' && inputs.upgrade-test }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -523,7 +559,8 @@ jobs:
     # Issue #23 : chaque page du plugin ouverte dans un navigateur, par un administrateur et un
     # compte non administrateur (voir README, « Parcours de toutes les pages »).
     name: Parcours de toutes les pages (${{ matrix.glpi-image }})
-    if: inputs.pages-test
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.heavy != 'false' && inputs.pages-test }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

@@ -57,8 +57,11 @@ skip() { echo "::warning::$1"; echo "RESULT errors=0 schema=0 data=0 objects=0 p
 
 docker cp "$HERE/glpi-upgrade-checks.php" "$C":/tmp/glpi-upgrade-checks.php
 EXC=""
-if [ -n "$EXCEPTIONS" ] && [ -f "$DIR/$EXCEPTIONS" ]; then
-  docker cp "$DIR/$EXCEPTIONS" "$C":/tmp/glpi-security-exceptions
+# Fichier d'exceptions et ses fragments (.glpi-security-exceptions.d/*), réunis en un seul fichier.
+if [ -n "$EXCEPTIONS" ] && { [ -f "$DIR/$EXCEPTIONS" ] || [ -d "$DIR/$EXCEPTIONS.d" ]; }; then
+  EXC_ALL=$(mktemp) && chmod 644 "$EXC_ALL"
+  bash "$HERE/exceptions-cat.sh" "$DIR/$EXCEPTIONS" > "$EXC_ALL"
+  docker cp "$EXC_ALL" "$C":/tmp/glpi-security-exceptions
   EXC=/tmp/glpi-security-exceptions
 fi
 docker exec "$DB" sh -c 'mariadb-dump -uroot -pglpi --single-transaction glpidb > /tmp/glpi-base.sql' \
