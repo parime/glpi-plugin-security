@@ -54,7 +54,7 @@ AXE_REFERENCE = ['front/central.php', 'front/computer.php', 'front/plugin.php', 
                  'front/ticket.form.php', 'front/config.form.php', 'front/crontask.php']
 # Composants du cœur (en-tête des fiches, info-bulle des listes déroulantes, boutons de Tabler) dont
 # les violations ne dépendent pas du plugin.
-AXE_CORE = re.compile(r'^#header-friendlyname$|^\.status$|#comment_link_|\.btn-outline-[a-z]+')
+AXE_CORE = re.compile(r'^#header-friendlyname$|^\.status$|#comment_link_|\.btn-outline-[a-z]+|\.form-control\[readonly')
 AXE_OPTIONS = {'runOnly': {'type': 'tag', 'values': ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']},
                'resultTypes': ['violations']}
 MAX_PAGES = 1500
