@@ -51,8 +51,8 @@ jobs:
           echo "$out"
           grep -q "RESULT tabs=1 rights=1 notifications=1 leftovers=1 menus=1" <<< "$out" \
             || { echo "::error::un contrôle ne détecte plus le défaut volontaire de secbad"; exit 1; }
-          grep -q "MENUS 2 entrée(s) de menu" <<< "$out" \
-            || { echo "::error::le contrôle des menus ne compte plus les deux entrées de secbad"; exit 1; }
+          grep -q "MENUS 3 entrée(s) de menu" <<< "$out" \
+            || { echo "::error::le contrôle des menus ne compte plus les trois entrées de secbad"; exit 1; }
           grep -q "::error::menus" <<< "$out" \
             || { echo "::error::le contrôle des menus ne bloque plus pour secbad"; exit 1; }
       - name: secgood doit passer
@@ -110,6 +110,41 @@ jobs:
           [ "$(grep -c '^::error' <<< "$out")" = 4 ] || { echo "::error::nombre d'écarts de secbad inattendu"; exit 1; }
       - name: secgood doit passer
         run: php checks/check-subtle-colors.php tests/fixtures/secgood
+
+  navigation:
+    name: Contrôle d'ergonomie (secbad échoue, secgood passe)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+      # secbad : deux entrées dans Outils, une dans Configuration, page de configuration rangée dans
+      # Assistance, page sans en-tête, bouton « Récupérer maintenant », tableau de résultats et lien
+      # vers une page d'usage dans la configuration ; secgood : la version correcte.
+      - name: secbad doit échouer sur les sept écarts
+        run: |
+          out=$(php checks/check-navigation.php tests/fixtures/secbad) \
+            && { echo "$out"; echo "::error::le contrôle d'ergonomie ne détecte plus les écarts de secbad"; exit 1; }
+          echo "$out"
+          for expected in "[menus-secteur tools]" "[menus-entree-native config > PluginSecbadThing]" \
+                          "[entete-secteur front/config.php]" "[page-entete front/report.php]" \
+                          "[config-action templates/config.html.twig]" "[config-tableau templates/config.html.twig]" \
+                          "[config-lien templates/config.html.twig > front/report.php]"; do
+            grep -qF "$expected" <<< "$out" || { echo "::error::écart non signalé : $expected"; exit 1; }
+          done
+          [ "$(grep -c '^::error' <<< "$out")" = 7 ] || { echo "::error::nombre d'écarts de secbad inattendu"; exit 1; }
+      - name: secbad n'échoue pas en mode avertissement, mais avertit
+        run: |
+          out=$(php checks/check-navigation.php tests/fixtures/secbad warning) \
+            || { echo "$out"; echo "::error::le mode avertissement ne doit pas échouer"; exit 1; }
+          echo "$out"
+          [ "$(grep -c '^::warning' <<< "$out")" = 7 ] || { echo "::error::le mode avertissement n'annote plus les écarts"; exit 1; }
+      - name: secbad passe quand chaque écart est une exception justifiée
+        run: |
+          d=$(mktemp -d); cp -r tests/fixtures/secbad/. "$d"
+          php checks/check-navigation.php "$d" | sed -n 's/^::error.*\[\(.*\)\]$/\1 : exception de test/p' > "$d/.glpi-security-exceptions"
+          cat "$d/.glpi-security-exceptions"
+          php checks/check-navigation.php "$d"
+      - name: secgood doit passer
+        run: php checks/check-navigation.php tests/fixtures/secgood
 
   archive:
     name: Contrôle de l'archive (sans export-ignore échoue, avec passe)
