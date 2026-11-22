@@ -30,6 +30,18 @@ fi
 cache=()
 [ -n "${TRIVY_CACHE_DIR:-}" ] && cache=(-v "$TRIVY_CACHE_DIR:/root/.cache")
 
+# Image téléchargée à part, avec nouvel essai : une panne réseau de Docker Hub ne doit jamais passer
+# pour une dépendance vulnérable (22/11, glpi-plugin-template#13).
+pulled=0
+for attempt in 1 2 3; do
+  if docker pull -q "$image" >/dev/null 2>&1; then pulled=1; break; fi
+  sleep $((attempt * 10))
+done
+if [ "$pulled" != 1 ]; then
+  echo "::error::image Trivy indisponible (téléchargement depuis Docker Hub en échec après 3 essais) : relancer le job, ce n'est pas une vulnérabilité"
+  exit 2
+fi
+
 if ! docker run --rm "${cache[@]}" -v "$dir:/src:ro" -v "$ignore:/tmp/trivyignore:ro" "$image" \
   fs --scanners vuln --pkg-types library --severity HIGH,CRITICAL --ignore-unfixed \
   --ignorefile /tmp/trivyignore --exit-code 1 --no-progress --skip-version-check /src; then
