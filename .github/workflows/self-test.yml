@@ -480,5 +480,9 @@ jobs:
         run: |
           f=.github/workflows/plugin-security.yml; ko=0
           for j in semgrep translations typography colors navigation archive workflows charter entrypoints secrets dependencies codeql-languages codeql dependency-review runtime translated-assertions integration-language upgrade pages; do grep -q "^  $j:$" "$f" || { echo "::error::job « $j » absent de $f"; ko=1; }; done
+<<<<<<< HEAD
           for i in navigation-mode tabs-mode pages-mode upgrade-test integration-languages translated-assertions-mode security-ref; do grep -q "^      $i:$" "$f" || { echo "::error::entrée « $i » absente de $f"; ko=1; }; done
+=======
+          for i in navigation-mode pages-mode upgrade-test integration-languages translated-assertions-mode security-ref; do grep -q "^      $i:$" "$f" || { echo "::error::entrée « $i » absente de $f"; ko=1; }; done
+>>>>>>> origin/main
           exit $ko

@@ -87,11 +87,14 @@ on:
         required: false
         type: string
         default: error
+<<<<<<< HEAD
       tabs-mode:
         description: "Rubriques et barres d'onglets (au plus 7, une ligne, clavier, rien d'inactif) et encadré Version du plugin : error (par défaut) ou warning, le temps de l'issue de navigation du plugin"
         required: false
         type: string
         default: error
+=======
+>>>>>>> origin/main
       pages-test:
         description: "Parcours de toutes les pages du plugin (false pour le désactiver)"
         required: false
@@ -203,8 +206,12 @@ jobs:
       - name: Page de configuration sans exploitation, menus, en-têtes des pages
         env:
           MODE: ${{ inputs.navigation-mode }}
+<<<<<<< HEAD
           TABS_MODE: ${{ inputs.tabs-mode }}
         run: php .glpi-plugin-security/checks/check-navigation.php . "$MODE" "$TABS_MODE"
+=======
+        run: php .glpi-plugin-security/checks/check-navigation.php . "$MODE"
+>>>>>>> origin/main
 
   archive:
     name: Archive de release sans fichier de développement
