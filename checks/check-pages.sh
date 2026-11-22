@@ -13,7 +13,6 @@
 set -uo pipefail
 DIR=$1 KEY=$2 EXCEPTIONS=${3:-} SEED=${4:-} MODE=${5:-error} MAX_MS=${6:-3000} ACCOUNTS=${7:-glpi:glpi tech:tech}
 C=${GLPI_CONTAINER:-glpisec}
-HERE=$(cd "$(dirname "$0")" && pwd)
 P=/var/www/glpi/plugins/$KEY
 LOGS=/var/glpi/logs
 W=${CRAWL_WORK:-$(mktemp -d)}
@@ -26,6 +25,7 @@ AXE_URL=https://cdn.jsdelivr.net/npm/axe-core@4.10.3/axe.min.js
 AXE_SHA256=880970c081707360e64f34cea25ff91892f5bc95675b0776925b9709dd8a68bb
 # Chemin d'un dossier pour docker run -v (Git Bash sous Windows : F:/...).
 hostpath() { (cd "$1" && { pwd -W 2>/dev/null || pwd; }); }
+HERE=$(hostpath "$(dirname "$0")")
 
 docker exec -u root "$C" rm -rf "$P"
 docker cp "$DIR/." "$C:$P"
@@ -61,7 +61,7 @@ for a in $ACCOUNTS; do ACC_ARG+=(--account "$a"); done
 
 # Le navigateur partage le réseau du conteneur GLPI : http://localhost est GLPI lui-même.
 MSYS_NO_PATHCONV=1 docker run --rm --network "container:$C" \
-  -v "$(hostpath "$HERE"):/checks:ro" -v "$(hostpath "$W"):/work" "$PLAYWRIGHT_IMAGE" \
+  -v "$HERE:/checks:ro" -v "$(hostpath "$W"):/work" "$PLAYWRIGHT_IMAGE" \
   sh -c 'pip install --quiet --disable-pip-version-check --root-user-action=ignore playwright==1.57.0 && exec python /checks/crawl-pages.py "$@"' sh \
   http://localhost --key "$KEY" --data /work/data.json --axe /work/axe.min.js --max-ms "$MAX_MS" --mode "$MODE" \
   "${EXC_ARG[@]}" "${ACC_ARG[@]}" | tee "$W/crawl.log"

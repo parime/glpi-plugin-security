@@ -169,6 +169,8 @@ class Crawler:
         except Exception:
             return False
         pid = self.page_id(name)
+        if pid not in self.front:  # page servie par GLPI (formulaire générique) : son fil est celui du cœur
+            return True
         if len(items) < 3:
             bad.append(('ariane', pid, 'fil d\'Ariane incomplet : %s' % ' > '.join(items)))
             return True
@@ -242,7 +244,7 @@ class Crawler:
         # y sont normaux, seuls 500, page blanche et erreurs comptent.
         reachable = set(menu)
         linked = set(menu)
-        outlinks = {}
+        outlinks, variants = {}, {}
         queue = menu + [self.prefix + p for p in self.front] + self.forms + self.core
         done, tabs_seen = set(), set()
         while queue and len(done) < MAX_PAGES:
@@ -294,7 +296,12 @@ class Crawler:
                 outlinks[name] = sub
                 if name in reachable:
                     reachable.update(sub)
-                queue += [p for p in sub if p not in done]
+                # Une même page avec d'autres paramètres (tri, pagination, fiches) : 5 variantes au plus.
+                for p in sub:
+                    path = p.split('?')[0]
+                    if p not in done and p not in queue and variants.get(path, 0) < 5:
+                        variants[path] = variants.get(path, 0) + 1
+                        queue.append(p)
                 self.check_tabs(pg, admin, tabs_seen, bad)
             if found:
                 first = list(found)
