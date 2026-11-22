@@ -25,6 +25,8 @@ jobs:
       # seed-command: php plugins/monplugin/tests/security/setup.php
       # Test de mise à jour depuis la dernière release (GLPI 11 et 12), actif par défaut :
       # upgrade-test: false pour le désactiver, upgrade-seed-command pour un autre jeu de données.
+      # Parcours de toutes les pages (GLPI 11 et 12), actif par défaut : pages-test: false pour le
+      # désactiver, pages-mode: warning le temps d'une issue de correction.
 ```
 
 Puis rendre le job « security » obligatoire dans la protection de la branche principale. Un nouveau
@@ -286,6 +288,63 @@ défectueuse (`bad`) : migration qui oublie une colonne et un index, table recon
 notification et droits retirés, avertissement PHP, page refusée. Chaque défaut doit être signalé.
 Lancement local : `bash checks/check-upgrade.sh <code> <clé> <version publiée> <sources> [exceptions] [jeu de données]`,
 la version publiée étant obtenue par `bash checks/fetch-previous-release.sh <owner/dépôt> <clé> <dossier> <checkout>`.
+
+### Parcours de toutes les pages (`checks/check-pages.sh`, GLPI 11 et 12, issue #23)
+
+Complète le contrôle statique d'ergonomie par ce que voit un utilisateur. Le job `pages`, une fois
+par image de `pages-glpi-images` (GLPI 11.0.11 et 12.0.1 par défaut), installe et active le plugin
+dans un GLPI jetable, lance `seed-command` s'il est fourni, lit dans GLPI les pages du plugin
+(`checks/crawl-data.php`), puis les ouvre dans Chromium (image Playwright de la CI de GRC,
+`checks/crawl-pages.py`, repris du parcours de GRC #1050) avec chaque compte de `pages-accounts` :
+`glpi` (administrateur) puis `tech` (technicien, sans droit d'administration) par défaut.
+
+Pages découvertes, sans liste à tenir : entrées `menu_toadd` et leurs sous-pages (menu de GLPI en
+session), page de configuration (`config_page`), chaque fichier `front/*.php`, une fiche existante
+de chaque formulaire du plugin, les objets du cœur auxquels il ajoute un onglet (une fiche est
+créée au besoin), puis chaque lien vers le plugin trouvé en chemin. Les onglets du plugin sont
+demandés comme le fait GLPI. Anomalies, avec leur identifiant :
+
+| Identifiant | Anomalie |
+|---|---|
+| `http-500` | Page en erreur serveur (5xx) |
+| `http-404` | Page proposée par un lien (menu, sous-page, fil d'Ariane) introuvable |
+| `http-403` | Page refusée à l'administrateur, ou à un autre compte alors que son menu la propose. Un fichier `front/` ouvert sans paramètre peut être une action : 400, 403 et 404 y sont normaux |
+| `php` | Erreur PHP ou Twig affichée dans la page ; aussi toute ligne écrite dans `php-errors.log` ou `sql-errors.log` pendant le parcours (`crawl php-errors`, `crawl sql-errors`, sans exception possible) |
+| `blank` | Page blanche (200, HTML, aucun texte) |
+| `js` | Erreur JavaScript ou boîte de dialogue qui revient à une seconde visite (une erreur isolée est seulement listée) |
+| `ariane` | Fil d'Ariane absent ou incomplet, secteur où le plugin n'a pas d'entrée de menu, ou, pour l'administrateur, différent de l'entrée de menu (ou de Configuration > Plugins pour la page de configuration) |
+| `tab` | Onglet du plugin en erreur (500, 404, 403 pour l'administrateur, erreur affichée) |
+| `orphan` | Écran du plugin (`front/`, 200 dans la mise en page de GLPI pour l'administrateur) qu'aucun menu ne permet d'atteindre, même par des liens successifs. Formulaires et actions (`.form.php`, `.export.php`, `.csv.php`…) exclus |
+| `axe:<règle>` | Violation d'accessibilité grave (axe-core 4.10.3, impact `critical` ou `serious`, WCAG 2.1 A et AA : contrastes, libellés de formulaires, rôles, textes de remplacement) dans le contenu de la page (`main#page`), hors violations déjà présentes sur les pages du cœur (accueil, ordinateurs, plugins) |
+| `perf` | Temps de réponse du serveur (requête envoyée, premier octet reçu) au-delà de `pages-max-ms` (3000 ms par défaut, `0` pour ne pas mesurer). Les cinq pages les plus lentes de chaque compte sont affichées |
+
+Une page s'identifie par son chemin depuis le dossier du plugin (`front/x.php`), sans sa requête,
+un onglet par `tab:<classe>$<numéro>`. Exception justifiée dans `.glpi-security-exceptions`, motifs
+`*` et `?` acceptés :
+
+```
+crawl orphan front/export.php : téléchargement ouvert depuis la liste, sans écran
+crawl axe:color-contrast front/dashboard.php : couleurs de la bibliothèque de graphiques
+crawl perf front/report.php : rapport annuel, calcul de plusieurs secondes connu
+```
+
+Réglages dans le `security.yml` du plugin :
+
+```yaml
+    with:
+      plugin-key: monplugin
+      pages-mode: warning        # le temps de l'issue de correction, comme navigation-mode
+      pages-max-ms: 5000
+      pages-accounts: 'glpi:glpi lecteur:MotDePasse#1'   # comptes créés par seed-command
+      # pages-test: false pour désactiver le job
+```
+
+Auto-test : secbad a une page en 500 (`crash.php`), un écran hors menu avec une image sans texte de
+remplacement (`hidden.php`) et sa page de configuration rangée dans Assistance (fil d'Ariane faux) ;
+secgood, la version correcte, passe. Lancement local (Docker) : `bash checks/start-glpi.sh`, puis
+`bash checks/check-pages.sh <dossier> <clé> [exceptions] [jeu de données] [error|warning] [seuil] [comptes]`
+(`GLPI_CONTAINER` et `GLPI_DB_CONTAINER` pour d'autres noms de conteneurs, `CRAWL_WORK` pour le
+dossier de travail).
 
 ### Points d'entrée, matrice d'accès et exigences marketplace (`checks/`)
 
