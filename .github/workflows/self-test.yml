@@ -290,6 +290,11 @@ jobs:
   codeql:
     name: CodeQL (${{ matrix.fixture }} ${{ matrix.expect }})
     runs-on: ubuntu-latest
+    # Sur une pull_request, CodeQL ne garde par défaut que les résultats des lignes modifiées
+    # (analyse limitée au diff) : la XSS volontaire de secbad disparaît dès qu'une PR ne touche pas
+    # public/js/thing.js. L'auto-test analyse toujours la fixture entière.
+    env:
+      CODEQL_ACTION_DIFF_INFORMED_QUERIES: false
     strategy:
       fail-fast: false
       matrix:
