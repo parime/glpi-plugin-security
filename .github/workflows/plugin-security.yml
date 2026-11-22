@@ -213,6 +213,132 @@ jobs:
       - name: Pas de SQL brut hors installation, pas de nouveau HTML écrit en PHP
         run: php .glpi-plugin-security/checks/check-marketplace-readiness.php .
 
+  secrets:
+    name: Aucun secret dans le dépôt (Gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+        with:
+          path: plugin
+          fetch-depth: 0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+        with:
+          repository: parime/glpi-plugin-security
+          ref: ${{ inputs.security-ref }}
+          path: security
+      # Les fichiers du dépôt, plus chaque commit d'une pull request (un secret ajouté puis retiré
+      # dans la PR reste dans l'historique publié). CLI dans son image épinglée, pas gitleaks-action :
+      # celle-ci appelle l'API pulls.listFiles, refusée (403) au jeton en lecture seule des PR Dependabot.
+      - name: Fichiers et commits de la pull request
+        env:
+          EXCEPTIONS: ${{ inputs.exceptions-file }}
+          RANGE: ${{ github.event_name == 'pull_request' && format('{0}..{1}', github.event.pull_request.base.sha, github.event.pull_request.head.sha) || '' }}
+        run: bash security/checks/check-secrets.sh plugin "$EXCEPTIONS" "$RANGE"
+
+  dependencies:
+    name: Dépendances sans vulnérabilité connue (Trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+        with:
+          path: plugin
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+        with:
+          repository: parime/glpi-plugin-security
+          ref: ${{ inputs.security-ref }}
+          path: security
+      # composer.lock, package-lock.json, yarn.lock... : gravité HIGH et CRITICAL, quand une version
+      # corrigée existe. Bloquant (code de sortie 1), contrairement à trivy-action par défaut.
+      - name: Dépendances composer et npm
+        env:
+          EXCEPTIONS: ${{ inputs.exceptions-file }}
+        run: bash security/checks/check-dependencies.sh plugin "$EXCEPTIONS"
+
+  codeql-languages:
+    name: Langages analysés par CodeQL
+    runs-on: ubuntu-latest
+    outputs:
+      languages: ${{ steps.detect.outputs.languages }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+        with:
+          path: plugin
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+        with:
+          repository: parime/glpi-plugin-security
+          ref: ${{ inputs.security-ref }}
+          path: security
+      - name: actions, javascript, python (d'après les fichiers suivis par git)
+        id: detect
+        run: |
+          languages=$(bash security/checks/codeql-languages.sh plugin)
+          echo "Langages : $languages"
+          echo "languages=$languages" >> "$GITHUB_OUTPUT"
+
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    needs: codeql-languages
+    if: needs.codeql-languages.outputs.languages != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ${{ fromJSON(needs.codeql-languages.outputs.languages) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+      # Résultats lus ici (upload: never) : ni droit security-events à demander au plugin, ni
+      # conflit avec la configuration CodeQL par défaut éventuellement activée dans le dépôt.
+      - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3 (SHA pinned)
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+          config: |
+            paths-ignore:
+              - vendor
+              - node_modules
+      - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3 (SHA pinned)
+        with:
+          category: /language:${{ matrix.language }}
+          upload: never
+          output: ${{ runner.temp }}/codeql
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+        with:
+          repository: parime/glpi-plugin-security
+          ref: ${{ inputs.security-ref }}
+          path: .glpi-plugin-security
+      - name: Aucun résultat CodeQL non justifié
+        env:
+          EXCEPTIONS: ${{ inputs.exceptions-file }}
+          SARIF: ${{ runner.temp }}/codeql
+        run: bash .glpi-plugin-security/checks/check-codeql-sarif.sh "$SARIF" "$EXCEPTIONS"
+
+  dependency-review:
+    name: Dépendances ajoutées par la pull request (Dependency Review)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+        with:
+          path: plugin
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+        with:
+          repository: parime/glpi-plugin-security
+          ref: ${{ inputs.security-ref }}
+          path: security
+      - name: "Avis justifiés (dependency-review <GHSA-…> : raison)"
+        id: allow
+        env:
+          EXCEPTIONS: ${{ inputs.exceptions-file }}
+        run: |
+          ids=$(bash security/checks/security-exceptions.sh "plugin/$EXCEPTIONS" dependency-review)
+          echo "ghsas=$(printf '%s' "$ids" | paste -sd, -)" >> "$GITHUB_OUTPUT"
+      # Bloque une PR qui ajoute ou met à jour une dépendance (composer, npm, actions) ayant un avis
+      # de sécurité connu, avant la fusion : Dependabot ne prévient qu'après coup.
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0 (SHA pinned)
+        with:
+          fail-on-severity: moderate
+          allow-ghsas: ${{ steps.allow.outputs.ghsas }}
+
   runtime:
     name: Contrôles dans un vrai GLPI (onglets, notifications, désinstallation)
     runs-on: ubuntu-latest
