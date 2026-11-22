@@ -50,7 +50,11 @@ MENU = 'aside.navbar a[href], header.navbar a[href], #navbar-menu a[href]'
 # Formulaires, exports et actions s'ouvrent depuis une autre page : seuls les écrans comptent.
 ACTION = re.compile(r'\.(form|export|pdf|send|report|ics|csv|import|download|ajax)\.php$|^front/(ajax|api)')
 # Pages du cœur de référence de l'accessibilité : leurs violations (menus, en-tête) ne comptent pas.
-AXE_REFERENCE = ['front/central.php', 'front/computer.php', 'front/plugin.php']
+AXE_REFERENCE = ['front/central.php', 'front/computer.php', 'front/plugin.php', 'front/computer.form.php',
+                 'front/ticket.form.php', 'front/config.form.php', 'front/crontask.php']
+# Composants du cœur (en-tête des fiches, info-bulle des listes déroulantes, boutons de Tabler) dont
+# les violations ne dépendent pas du plugin.
+AXE_CORE = re.compile(r'^#header-friendlyname$|^\.status$|#comment_link_|\.btn-outline-[a-z]+')
 AXE_OPTIONS = {'runOnly': {'type': 'tag', 'values': ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']},
                'resultTypes': ['violations']}
 MAX_PAGES = 1500
@@ -159,7 +163,8 @@ class Crawler:
         except Exception as exc:
             print('axe-core : %s' % str(exc).splitlines()[0][:160])
             return set()
-        return {(rule, target, helptext) for rule, targets, helptext in res for target in targets}
+        # Identifiants générés (comment_link_x_id1665379715) : chiffres normalisés pour comparer.
+        return {(rule, re.sub(r'\d{3,}', '#', target), helptext) for rule, targets, helptext in res for target in targets}
 
     def check_crumbs(self, pg, name, admin, bad):
         try:
@@ -288,8 +293,13 @@ class Crawler:
                 if self.check_crumbs(pg, name, admin, bad):
                     if admin and urlsplit(name).path[len(self.prefix):] in self.front and '?' not in name:
                         screens.add(pid)
-                    for rule, target, helptext in sorted(self.run_axe(pg) - axe_base):
-                        bad.append(('axe:' + rule, pid, '%s : %s' % (helptext, target)))
+                    found_axe = {}
+                    for rule, target, helptext in sorted(self.run_axe(pg)):
+                        if (rule, target) not in axe_base and not AXE_CORE.search(target):
+                            found_axe.setdefault((rule, helptext), []).append(target)
+                    for (rule, helptext), targets in sorted(found_axe.items()):
+                        bad.append(('axe:' + rule, pid, '%s : %d élément(s), %s'
+                                    % (helptext, len(targets), ' ; '.join(targets[:3]))))
             if st < 400:
                 sub = self.links(pg, 'a[href]')
                 linked.update(sub)
@@ -342,7 +352,7 @@ class Crawler:
             print('référence axe-core : %s' % str(exc).splitlines()[0][:160])
         ctx.close()
         # Une violation du cœur se reconnaît à sa règle et à sa cible, quel que soit le texte d'aide.
-        return {(rule, target, helptext) for rule, target, helptext in base}
+        return {(rule, target) for rule, target, _ in base}
 
 
 def crawl_account(crawler, account, admin):
@@ -393,9 +403,9 @@ def main():
                for p in sorted(screens - reachable) if not ACTION.search(p)]
     for login, bad, _, _, _, _ in results:
         for kind, pid, msg in bad + (orphans if login == admin_login else []):
-            if (login, kind, pid, msg) in seen:
+            if (login, kind, pid) in seen:  # une anomalie par page, compte et identifiant
                 continue
-            seen.add((login, kind, pid, msg))
+            seen.add((login, kind, pid))
             if excused(kind, pid):
                 print('exception crawl %s %s (%s) : %s' % (kind, pid, login, msg))
                 continue
