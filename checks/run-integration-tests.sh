@@ -50,12 +50,13 @@ fi
 
 # Traductions compilées : sans .mo, la passe en français afficherait les textes anglais.
 if [ -d "$DIR/locales" ]; then
+  # gettext (msgfmt, msgcat) est nécessaire aux deux chemins : build_locales.py l'appelle aussi (GRC, v1.10.0).
+  command -v msgfmt >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends gettext >/dev/null; }
   if [ -f "$DIR/tools/build_locales.py" ]; then
     (cd "$DIR" && python3 tools/build_locales.py) || { echo "::error::tools/build_locales.py a échoué"; exit 1; }
   fi
   for po in "$DIR"/locales/*.po; do
     [ -f "$po" ] && [ ! -f "${po%.po}.mo" ] || continue
-    command -v msgfmt >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends gettext >/dev/null; }
     msgfmt -o "${po%.po}.mo" "$po" || { echo "::error::compilation de $po impossible"; exit 1; }
   done
 fi
