@@ -81,7 +81,10 @@ BARS = '''const root = document.querySelector("main#page") || document.body;
     .map(b => [b, [...new Set(b.querySelectorAll(itemSel))]])
     .filter(([b, it]) => it.length >= 2 && !it.some(e => e.hasAttribute('data-glpi-ajax-content')))
     .map(([b, it]) => [b, it.filter(e => { const r = e.getBoundingClientRect();
-      return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== 'hidden'; })]);'''
+      return r.width > 0 && r.height > 0 && getComputedStyle(e).visibility !== 'hidden'; })])
+    // Barre sans onglet visible (masquée par un ancêtre, comme le panneau « Recherches enregistrées »
+    // du cœur GLPI) : rien à compter ni à parcourir au clavier (issue #46).
+    .filter(([b, visible]) => visible.length > 0);'''
 TAB_BARS_JS = '''() => { %s
   return bars.map(([bar, visible]) => ({
     role: bar.getAttribute('role') || '',
@@ -277,7 +280,8 @@ class Crawler:
                           else '%d onglet(s) sans role=tab' % bar['noTabRole'])
                 bad.append(('onglets-role', pid, 'barre « %s » : role=tablist sur la barre et role=tab sur chaque '
                             'onglet attendus (%s)' % (label, detail)))
-            if admin:
+            # Un seul onglet visible : pas d'onglet suivant vers lequel passer au clavier (issue #46).
+            if admin and bar['count'] >= 2:
                 try:
                     moved = False
                     if pg.evaluate(TAB_FOCUS_JS, index):

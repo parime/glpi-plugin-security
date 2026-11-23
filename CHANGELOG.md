@@ -3,6 +3,15 @@
 Les versions antérieures à v1.11.0 sont décrites dans les
 [publications GitHub](https://github.com/parime/glpi-plugin-security/releases) du dépôt.
 
+## v1.11.2
+
+### Corrigé
+- Parcours des pages, écart `onglets-clavier` (depuis v1.10.3) : une barre d'onglets sans onglet
+  visible (masquée par un ancêtre, comme le panneau « Recherches enregistrées » du cœur GLPI présent
+  sur les listes et certaines fiches) n'est plus comptée ni parcourue au clavier, et une barre dont
+  un seul onglet est visible n'a plus à passer au suivant (#46, faux positifs sur AssetSign). Cas
+  ajoutés à secgood.
+
 ## v1.11.1
 
 ### Corrigé
