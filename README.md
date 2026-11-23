@@ -25,7 +25,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   security:
-    uses: parime/glpi-plugin-security/.github/workflows/plugin-security.yml@v1.11.1
+    uses: parime/glpi-plugin-security/.github/workflows/plugin-security.yml@v1.11.2
     with:
       plugin-key: monplugin   # nom du dossier dans plugins/ (plugin_version_monplugin)
       # Facultatif : une PR qui ne touche que la documentation ne démarre aucun GLPI
