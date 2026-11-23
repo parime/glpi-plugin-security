@@ -214,6 +214,28 @@ jobs:
           out=$(php checks/check-navigation.php "$d") && { echo "$out"; echo "::error::module-inactif non signalé"; exit 1; }
           grep -qF "[module-inactif PluginSecgoodFramework::getMenuContent]" <<< "$out" \
             || { echo "$out"; echo "::error::écart module-inactif attendu"; exit 1; }
+      # glpi-plugin-template#18 : l'encadré « Version du plugin » est le premier bloc de la page de
+      # configuration ou de son premier onglet. secgood l'a en tête ; déplacé après le formulaire,
+      # ou dans le second onglet, l'écart config-version-premier est signalé.
+      - name: encadré de version en tête accepté, après un autre bloc ou hors du premier onglet refusé
+        run: |
+          inc="{% include '@secgood/_plugin_version.html.twig' %}"
+          d=$(mktemp -d); cp -r tests/fixtures/secgood/. "$d"
+          sed -i '/_plugin_version/d' "$d/templates/config.html.twig"
+          echo "$inc" >> "$d/templates/config.html.twig"
+          out=$(php checks/check-navigation.php "$d") && { echo "$out"; echo "::error::encadré après le formulaire non signalé"; exit 1; }
+          grep -qF "[config-version-premier templates/config.html.twig]" <<< "$out" \
+            || { echo "$out"; echo "::error::écart config-version-premier attendu (après un bloc)"; exit 1; }
+          printf '%s\n' '<div class="tab-content">' \
+            '<div class="tab-pane fade show active" id="t-general" role="tabpanel"><input type="url" name="url" aria-label="URL"></div>' \
+            '<div class="tab-pane fade" id="t-about" role="tabpanel">' "$inc" '</div></div>' > "$d/templates/config.html.twig"
+          out=$(php checks/check-navigation.php "$d") && { echo "$out"; echo "::error::encadré dans le second onglet non signalé"; exit 1; }
+          grep -qF "pas dans le premier onglet" <<< "$out" \
+            || { echo "$out"; echo "::error::écart config-version-premier attendu (second onglet)"; exit 1; }
+          printf '%s\n' "{% include '@secgood/_page_help.html.twig' %}" '<div class="tab-content">' \
+            '<div class="tab-pane fade show active" id="t-general" role="tabpanel">' "$inc" \
+            '<input type="url" name="url" aria-label="URL"></div></div>' > "$d/templates/config.html.twig"
+          php checks/check-navigation.php "$d"
 
   archive:
     name: Contrôle de l'archive (sans export-ignore échoue, avec passe)

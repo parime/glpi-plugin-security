@@ -31,7 +31,9 @@
  *      - module-inactif : classe d'un module activable (is…Enabled()) dont getTabNameForItem() ou
  *        getMenuContent() ne consulte pas l'activation ;
  *      - config-version : page de configuration sans l'encadré « Version du plugin »
- *        (_plugin_version.html.twig du modèle).
+ *        (_plugin_version.html.twig du modèle) ;
+ *      - config-version-premier : encadré qui n'est pas le premier bloc de la page de configuration
+ *        ou de son premier onglet (après l'aide de page et la barre d'onglets).
  *
  * Faux positif ou écart justifié : ligne « <contrôle> <identifiant> : <raison> » dans
  * .glpi-security-exceptions, avec l'identifiant affiché entre crochets dans le message.
@@ -895,6 +897,47 @@ if ($configPage !== null && is_file($configPage)) {
             . '« Version du plugin » (version installée et dernière version publiée). Inclure le composant du modèle '
             . "{% include '@<clé>/_plugin_version.html.twig' %} (parime/glpi-plugin-template, "
             . 'templates/_plugin_version.html.twig). Charte, section 9 : ' . CHARTER, $tabsLevel);
+    }
+    // Position (glpi-plugin-template#18) : l'encadré est le premier bloc de la page de configuration,
+    // ou de son premier onglet. Seuls l'aide de page (_page_help), la barre d'onglets (_section_nav)
+    // et les conteneurs (div, form, champs cachés) peuvent le précéder. L'onglet est un
+    // <div class="tab-pane"> ou une branche {% if tab == '...' %} : la première de la page.
+    foreach (array_keys($configFiles) as $file) {
+        if (!str_ends_with($file, '.twig')) {
+            continue;
+        }
+        $code = (string) preg_replace_callback('/<!--.*?-->/s', static fn (array $m): string => str_repeat("\n", substr_count($m[0], "\n")), stripTwigComments((string) file_get_contents($file)));
+        if (!preg_match('/(?:\{%-?\s*include\s*|\{\{-?\s*include\(\s*)[\'"][^\'"]*_plugin_version\.html\.twig/', $code, $inc, PREG_OFFSET_CAPTURE)) {
+            continue;
+        }
+        $at = $inc[0][1];
+        $line = substr_count(substr($code, 0, $at), "\n") + 1;
+        $before = substr($code, 0, $at);
+        $start = 0;
+        $earlier = false;
+        $openers = [
+            '/<div\b[^>]*\bclass="[^"]*\btab-pane\b[^>]*>/',
+            '/\{%-?\s*(?:if|elseif)\s+(?:\w+\.)?(?:tab|active_tab|current_tab)\s*(?:==|is\s+same\s+as\b|in\b)[^%]*%\}/',
+        ];
+        foreach ($openers as $opener) {
+            if (preg_match_all($opener, $before, $all, PREG_OFFSET_CAPTURE) > 0) {
+                $last = end($all[0]);
+                if ($last[1] + strlen($last[0]) > $start) {
+                    $start = $last[1] + strlen($last[0]);
+                    $earlier = count($all[0]) > 1;
+                }
+            }
+        }
+        $segment = substr($before, $start);
+        $block = '/\{\{-?\s*fields\.|<(?:table|h[1-6]|p|label|select|textarea|img|dl)\b|<input\b(?![^>]*type="hidden")'
+            . '|\bclass="[^"]*\b(?:alert|card-title)\b'
+            . '|(?:\{%-?\s*(?:include|embed)\s*|\{\{-?\s*include\(\s*)[\'"](?![^\'"]*_(?:page_help|section_nav)\.html\.twig)/';
+        if ($earlier || preg_match($block, $segment, $first)) {
+            $why = $earlier ? "il n'est pas dans le premier onglet" : 'un autre bloc le précède (' . trim($first[0]) . ')';
+            $report("config-version-premier $file", $file, $line, "l'encadré « Version du plugin » doit être le premier "
+                . "bloc de la page de configuration, en tête de son premier onglet : $why. Le placer juste après "
+                . "l'aide de page et la barre d'onglets. Charte, section 9 bis : " . CHARTER, $tabsLevel);
+        }
     }
 }
 
