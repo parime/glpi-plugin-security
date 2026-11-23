@@ -25,7 +25,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   security:
-    uses: parime/glpi-plugin-security/.github/workflows/plugin-security.yml@v1.11.2
+    uses: parime/glpi-plugin-security/.github/workflows/plugin-security.yml@v1.11.3
     with:
       plugin-key: monplugin   # nom du dossier dans plugins/ (plugin_version_monplugin)
       # Facultatif : une PR qui ne touche que la documentation ne démarre aucun GLPI
@@ -122,6 +122,7 @@ indique le fichier, la ligne, le problème, l'emplacement attendu, et son identi
 | `rubrique-onglets <déclaration>` | Plus de 7 sous-pages dans une rubrique (issue #34) : fonctions `sections()`, `screens()`, `tabs()`, `subPages()` qui renvoient un tableau (rubrique => liste de sous-pages, la rubrique comptant pour un onglet, ou liste des écrans d'une barre), clé `'pages' => [...]` |
 | `module-inactif <Classe>::<méthode>` | Classe d'un module activable (`isEnabled()`, `isModuleEnabled()`, `isFrameworkEnabled()`, `isFeatureEnabled()`) dont `getTabNameForItem()` ou `getMenuContent()` ne consulte pas l'activation : onglet ou entrée affichés pour un module désactivé |
 | `config-version <page>` | Page de configuration sans l'encadré « Version du plugin » (composant `templates/_plugin_version.html.twig` de [glpi-plugin-template](https://github.com/parime/glpi-plugin-template), ou classe `PluginVersion…`) |
+| `config-version-premier <gabarit>` | Encadré « Version du plugin » qui n'est pas le premier bloc de la page de configuration ou de son premier onglet (seuls l'aide de page et la barre d'onglets peuvent le précéder) |
 
 Les trois derniers suivent leur propre mode, `tabs-mode` (comme les barres d'onglets du parcours des
 pages) : un plugin peut garder le reste bloquant pendant la refonte de ses rubriques.

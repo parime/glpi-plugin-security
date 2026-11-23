@@ -3,6 +3,18 @@
 Les versions antérieures à v1.11.0 sont décrites dans les
 [publications GitHub](https://github.com/parime/glpi-plugin-security/releases) du dépôt.
 
+## v1.11.3
+
+### Ajouté
+- Ergonomie, nouvel écart `config-version-premier <gabarit>` (mode `tabs-mode`, comme
+  `config-version`) : l'encadré « Version du plugin » doit être le premier bloc de la page de
+  configuration, en tête de son premier onglet (glpi-plugin-template#18, charte section 9 bis).
+  Analyse statique du gabarit qui inclut `_plugin_version.html.twig` : l'onglet est le
+  `<div class="tab-pane">` ou la branche `{% if tab == '...' %}` qui le contient, et il doit être
+  le premier de la page ; avant l'encadré, seuls l'aide de page (`_page_help`), la barre d'onglets
+  (`_section_nav`) et des conteneurs sont admis (pas de champ, titre, tableau, paragraphe, alerte
+  ni autre inclusion). Cas ajoutés à l'auto-test.
+
 ## v1.11.2
 
 ### Corrigé
