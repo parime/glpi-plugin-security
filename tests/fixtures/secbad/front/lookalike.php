@@ -11,8 +11,8 @@ Session::checkRight('config', READ);
 
 Html::header('Lookalike', '', 'tools', PluginSecbadThing::class);
 echo '<div class="card">';
-echo '<a href="denied.php">Page refusée</a>';
-echo '<a class="bs-invisible" href="hiddendenied.php">Page refusée, lien masqué</a>';
+echo '<a href="denied.php?from=lookalike">Page refusée</a>';
+echo '<a class="bs-invisible" href="hiddendenied.php?from=lookalike">Page refusée, lien masqué</a>';
 echo '<select id="plugin_rows" name="rows"><option>10</option></select>';
 echo '<select id="dropdown_glpilist_limit1234567" name="glpilist_limit"><option>20</option></select>';
 echo '</div>';
