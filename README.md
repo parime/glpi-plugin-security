@@ -349,6 +349,26 @@ Barres d'onglets contrôlées : `role="tablist"`, `.nav-tabs`, `.nav-pills` du c
 Ces six anomalies suivent leur propre mode, `tabs-mode` (le même que les rubriques du contrôle
 statique), indépendant de `pages-mode`.
 
+#### Tranches parallèles (`pages-shards`, issue #45)
+
+Le parcours est le chemin critique de la CI des plugins (plus de 25 minutes par image pour GRC). Il
+est découpé en `pages-shards` tranches par image (4 par défaut, de 1 à 16) : les jobs
+« Parcours des pages (glpi/glpi:X, tranche k) » démarrent chacun leur GLPI avec le même jeu de
+données et suivent toutes les pages dans le même ordre, mais n'ouvrent dans le navigateur (contrôles
+complets) que celles de leur tranche, réparties de façon stable par l'empreinte de leur adresse
+(jetons CSRF exclus). Les pages des autres tranches sont seulement demandées, pour lire leurs liens
+dans le HTML reçu ; un lien que seul le navigateur voit (ajouté par JavaScript) est parcouru par la
+tranche qui le trouve. Aucune page n'est donc perdue, sur une PR comme sur un push.
+
+Chaque tranche dépose son rapport (artefact de 3 jours) sans rien juger. Le job « Parcours de
+toutes les pages (glpi/glpi:X) », dont le nom ne change pas (contrôle exigé par la protection de
+branche), réunit les rapports (`checks/check-pages-merge.sh`) et rend le verdict comme un parcours
+d'un seul tenant : exceptions de `.glpi-security-exceptions` et de ses fragments `.d/`, écrans
+orphelins calculés sur les liens de toutes les tranches, journaux PHP et SQL de chaque GLPI, modes
+`pages-mode` et `tabs-mode`. Une tranche sans rapport fait échouer le verdict ; une page découverte
+par une tranche mais parcourue par aucune est signalée en avertissement. `pages-shards: 1` revient
+à un seul parcours par image (toujours suivi du job de verdict).
+
 Une page s'identifie par son chemin depuis le dossier du plugin (`front/x.php`), sans sa requête,
 un onglet par `tab:<classe>$<numéro>`. Exception justifiée dans `.glpi-security-exceptions`, motifs
 `*` et `?` acceptés :
@@ -367,6 +387,7 @@ Réglages dans le `security.yml` du plugin :
       pages-mode: warning        # le temps de l'issue de correction, comme navigation-mode
       tabs-mode: warning         # barres d'onglets et rubriques, le temps de l'issue de navigation
       pages-max-ms: 5000
+      pages-shards: 6            # tranches parallèles par image (4 par défaut)
       pages-accounts: 'glpi:glpi lecteur:MotDePasse#1'   # comptes créés par seed-command
       # pages-test: false pour désactiver le job
 ```
@@ -376,10 +397,14 @@ remplacement (`hidden.php`) et sa page de configuration rangée dans Assistance 
 secgood, la version correcte, passe. Depuis l'issue #34, secbad a aussi une barre de 9 onglets
 (`tabs.php`) sans rôles ARIA, sur plusieurs lignes, inatteignable au clavier, avec un onglet refusé
 au technicien et un onglet vers un module désactivé ; secgood, une barre de deux onglets correcte.
+Issue #45 : secbad et secgood sont aussi parcourus en 2 tranches réunies, qui doivent donner les
+mêmes défauts et le même résultat (pages, anomalies) qu'un seul parcours ; une tranche manquante
+fait échouer l'agrégat.
 Lancement local (Docker) : `bash checks/start-glpi.sh`, puis
 `bash checks/check-pages.sh <dossier> <clé> [exceptions] [jeu de données] [error|warning] [seuil] [comptes] [tabs-mode]`
 (`GLPI_CONTAINER` et `GLPI_DB_CONTAINER` pour d'autres noms de conteneurs, `CRAWL_WORK` pour le
-dossier de travail).
+dossier de travail). En tranches : `CRAWL_SHARD=k/N CRAWL_WORK=<rapports>/pages-k bash checks/check-pages.sh ...`
+pour chaque tranche, puis `bash checks/check-pages-merge.sh <dossier> <rapports> N [exceptions] [error|warning] [tabs-mode]`.
 
 ### Points d'entrée, matrice d'accès et exigences marketplace (`checks/`)
 

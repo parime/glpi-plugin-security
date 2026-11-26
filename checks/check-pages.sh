@@ -8,6 +8,9 @@
 #                        [mode des barres d'onglets : error|warning, issue #34]
 #   Comptes par défaut : « glpi:glpi tech:tech » (administrateur, puis technicien sans droit
 #   d'administration). Dossier de travail : CRAWL_WORK (défaut : dossier temporaire).
+#   Tranche (issue #45) : CRAWL_SHARD=k/N ne parcourt en profondeur que la tranche k et écrit dans
+#   CRAWL_WORK le rapport report.json et les journaux retenus (*.kept), sans rien juger : le verdict
+#   (exceptions comprises) est rendu par check-pages-merge.sh sur les N rapports.
 #
 # Sortie : les anomalies, puis « RESULT crawl pages=<n> anomalies=<n> » et « RESULT logs=<0|1> » ;
 # code 1 s'il reste une anomalie en mode error.
@@ -19,6 +22,7 @@ LOGS=/var/glpi/logs
 W=${CRAWL_WORK:-$(mktemp -d)}
 mkdir -p "$W"
 LEVEL=$([ "$MODE" = warning ] && echo warning || echo error)
+SHARD=${CRAWL_SHARD:-}
 # Image Playwright de la CI de GRC (tests/security/js-errors.py) ; playwright Python, même version,
 # installé au lancement. axe-core épinglé par son empreinte.
 PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright/python:v1.57.0-noble@sha256:3de745b23fc4b33fccbcb3f592ee52dd5c80ce79f19f839c825ce23364e403c1
@@ -60,13 +64,19 @@ if [ -n "$EXCEPTIONS" ] && { [ -f "$DIR/$EXCEPTIONS" ] || [ -d "$DIR/$EXCEPTIONS
 fi
 ACC_ARG=()
 for a in $ACCOUNTS; do ACC_ARG+=(--account "$a"); done
+SHARD_ARG=()
+if [ -n "$SHARD" ]; then
+  rm -f "$W/report.json"
+  SHARD_ARG=(--shard "$SHARD" --report /work/report.json)
+  EXC_ARG=()  # exceptions appliquées au rapport agrégé (check-pages-merge.sh)
+fi
 
 # Le navigateur partage le réseau du conteneur GLPI : http://localhost est GLPI lui-même.
 MSYS_NO_PATHCONV=1 docker run --rm --network "container:$C" \
   -v "$HERE:/checks:ro" -v "$(hostpath "$W"):/work" "$PLAYWRIGHT_IMAGE" \
   sh -c 'pip install --quiet --disable-pip-version-check --root-user-action=ignore playwright==1.57.0 && exec python -u /checks/crawl-pages.py "$@"' sh \
   http://localhost --key "$KEY" --data /work/data.json --axe /work/axe.min.js --max-ms "$MAX_MS" --mode "$MODE" --tabs-mode "$TABS_MODE" \
-  "${EXC_ARG[@]}" "${ACC_ARG[@]}" | tee "$W/crawl.log"
+  "${EXC_ARG[@]}" "${ACC_ARG[@]}" "${SHARD_ARG[@]}" | tee "$W/crawl.log"
 CRAWL=${PIPESTATUS[0]}
 grep -q '^RESULT crawl' "$W/crawl.log" || { echo "::error::le parcours n'a pas abouti"; CRAWL=1; }
 
@@ -77,11 +87,21 @@ for log in php-errors sql-errors; do
   docker exec "$C" cat "$LOGS/$log.log" > "$W/$log.log" 2>/dev/null || true
   awk '/^\[[0-9][0-9][0-9][0-9]-/ { keep = ($0 !~ ENVIRON["BENIGN"]) } keep' "$W/$log.log" > "$W/$log.kept"
   if [ -s "$W/$log.kept" ]; then
+    [ -n "$SHARD" ] && { echo "crawl $log (tranche $SHARD, jugé à l'agrégation) :"; head -40 "$W/$log.kept"; continue; }
     echo "::$LEVEL::crawl $log : erreurs écrites dans $log.log pendant le parcours :"
     head -40 "$W/$log.kept"
     LOGERR=1
   fi
 done
+if [ -n "$SHARD" ]; then
+  if [ "$CRAWL" = 0 ] && [ -s "$W/report.json" ]; then
+    echo "Rapport de la tranche $SHARD : $W/report.json"
+    exit 0
+  fi
+  echo "::$LEVEL::tranche $SHARD : le parcours n'a pas produit de rapport"
+  [ "$MODE" = warning ] && exit 0
+  exit 1
+fi
 echo "RESULT logs=$LOGERR"
 [ "$MODE" = warning ] && exit 0
 [ "$CRAWL" = 0 ] && [ "$LOGERR" = 0 ]
