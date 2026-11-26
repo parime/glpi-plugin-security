@@ -501,6 +501,14 @@ jobs:
                     "crawl onglet-refuse front/tabs.php" "crawl onglet-inactif front/tabs.php"; do
             grep -q "^::error::$id" <<< "$out" || { echo "::error::défaut non signalé : $id"; exit 1; }
           done
+          # Issue #50 : composants du cœur ignorés, défauts équivalents du plugin toujours signalés
+          # (lookalike.php : lien visible vers une page refusée, liste sans nom accessible du plugin).
+          grep -q "^::error::crawl http-403 front/denied.php" <<< "$out" || { echo "::error::lien visible vers une page refusée non signalé"; exit 1; }
+          grep -q "^::error::crawl http-403 front/hiddendenied.php" <<< "$out" && { echo "::error::lien masqué (bs-invisible) suivi comme un lien visible"; exit 1; }
+          line=$(grep "^::error::crawl axe:select-name front/lookalike.php" <<< "$out") || { echo "::error::liste sans nom accessible du plugin non signalée"; exit 1; }
+          grep -q "#plugin_rows" <<< "$line" || { echo "::error::liste du plugin absente du signalement : $line"; exit 1; }
+          grep -q "list_limit" <<< "$line" && { echo "::error::sélecteur du nombre de lignes du cœur compté au plugin : $line"; exit 1; }
+          true
       - name: secbad n'échoue pas en mode avertissement, mais avertit
         run: |
           out=$(bash checks/check-pages.sh tests/fixtures/secbad secbad "" "" warning "" "" warning) || { echo "$out"; echo "::error::le mode avertissement bloque"; exit 1; }

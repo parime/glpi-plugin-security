@@ -76,6 +76,39 @@ AXE_REFERENCE = ['front/central.php', 'front/computer.php', 'front/plugin.php', 
 # Composants du cœur (en-tête des fiches, info-bulle des listes déroulantes, boutons de Tabler) dont
 # les violations ne dépendent pas du plugin.
 AXE_CORE = re.compile(r'^#header-friendlyname$|^\.status$|#comment_link_|\.btn-outline-[a-z]+|\.form-control\[readonly')
+# Composants du cœur absents des pages de référence (issue #50), par règle : leur balisage est celui
+# des macros et scripts de GLPI (identifiants aléatoires normalisés en #), pas celui du plugin. Un
+# champ, une liste ou un bouton du plugin, de même défaut, garde une cible propre et reste signalé.
+FLATPICKR = r'_#( > \.input|_input)$'
+SELECT2 = r'\.select2-selection--(single|multiple)|\.select2-search__field|#select2-.+-container'
+AXE_CORE_RULES = {
+    # Sélecteur de date flatpickr, listes select2, envoi de fichiers (#fileupload<aléatoire>).
+    'label': re.compile(FLATPICKR + '|' + SELECT2 + r'|^#fileupload#$'),
+    'aria-allowed-attr': re.compile(FLATPICKR + r'|\.flatpickr-input'),  # aria-label du champ de date (GLPI 12)
+    'aria-input-field-name': re.compile(SELECT2),
+    # Nombre de lignes des listes (glpilist_limit) et sélecteur de tableau de bord (#dropdown_<aléatoire>).
+    'select-name': re.compile(r'list_limit|^#dropdown_#$'),
+    # Barre d'outils des tableaux de bord, champs de la fiche ITIL.
+    'aria-prohibited-attr': re.compile(r'\.(auto-refresh|edit-dashboard|add-dashboard|ti-copy|itilstatus)\b'
+                                       r'|^#time_to_resolve_#'),
+    'list': re.compile(r'^\.list$'),  # grille des cartes des tableaux de bord
+    # Boutons d'icône de la fiche ITIL (replier, largeur, filtre de la chronologie, action unique).
+    'button-name': re.compile(r'\.(collapse-panel|switch-panel-width|open-timeline-filter-popover)\b|^#single-action$'),
+    'aria-valid-attr-value': re.compile(r'button\[data-bs-target="#item-main"\]'),
+    # Palette par défaut de Tabler et GLPI : boutons standard, statuts et avatars des fiches ITIL,
+    # libellés des graphiques des tableaux de bord.
+    'color-contrast': re.compile(r'\.btn-(success|info|warning)\b|\.status\.rounded-1|\.avatar\b'
+                                 r'|^#chart-# > \.main-label$'),
+}
+# Couleur principale de la palette par défaut « auror » : liens et boutons de la couleur du thème,
+# quel que soit leur balisage (contraste lu par axe-core). Une couleur choisie par le plugin reste signalée.
+AXE_CORE_COLORS = ['#fec95c']
+
+
+def core_violation(rule, target):
+    """Violation d'un composant du cœur de GLPI, qui ne dépend pas du plugin."""
+    pattern = AXE_CORE_RULES.get(rule)
+    return bool(AXE_CORE.search(target) or (pattern and pattern.search(target)))
 AXE_OPTIONS = {'runOnly': {'type': 'tag', 'values': ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']},
                'resultTypes': ['violations']}
 MAX_PAGES = 1500
@@ -194,7 +227,12 @@ class Crawler:
 
     def links(self, pg, selector):
         try:
-            hrefs = pg.eval_on_selector_all(selector, 'els => els.map(e => e.getAttribute("href") || "")')
+            # Liens masqués (visibility: hidden, comme les liens bs-invisible vers id=-1 de l'en-tête de
+            # navigation des fiches du cœur, issue #50) : personne ne peut les suivre. Les entrées des
+            # menus repliés (display: none) restent suivies.
+            hrefs = pg.eval_on_selector_all(selector, 'els => els.filter(e => !e.closest(".bs-invisible")'
+                                            ' && getComputedStyle(e).visibility !== "hidden")'
+                                            '.map(e => e.getAttribute("href") || "")')
         except Exception:
             return []
         out = []
@@ -262,9 +300,13 @@ class Crawler:
             if not pg.evaluate('typeof axe !== "undefined"'):
                 pg.add_script_tag(content=self.axe)
             res = pg.evaluate('async (o) => { const c = document.querySelector("main#page") || document;'
-                              ' const r = await axe.run(c, o); return r.violations.filter(v =>'
-                              ' ["critical", "serious"].includes(v.impact)).map(v => [v.id, v.nodes.map(n =>'
-                              ' n.target.join(" ")), v.help]); }', AXE_OPTIONS)
+                              ' const r = await axe.run(c, o.options); return r.violations.filter(v =>'
+                              ' ["critical", "serious"].includes(v.impact)).map(v => [v.id, v.nodes'
+                              # Contraste dû à la couleur principale du thème par défaut (issue #50).
+                              '.filter(n => !(v.id === "color-contrast" && (n.any || []).some(a => a.data'
+                              ' && [a.data.fgColor, a.data.bgColor].some(x => o.colors.includes(String(x).toLowerCase())))))'
+                              '.map(n => n.target.join(" ")), v.help]); }',
+                              {'options': AXE_OPTIONS, 'colors': AXE_CORE_COLORS})
         except Exception as exc:
             print('axe-core : %s' % str(exc).splitlines()[0][:160])
             return set()
@@ -499,7 +541,7 @@ class Crawler:
                         screens.add(pid)
                     found_axe = {}
                     for rule, target, helptext in sorted(self.run_axe(pg)):
-                        if (rule, target) not in axe_base and not AXE_CORE.search(target):
+                        if (rule, target) not in axe_base and not core_violation(rule, target):
                             found_axe.setdefault((rule, helptext), []).append(target)
                     for (rule, helptext), targets in sorted(found_axe.items()):
                         bad.append(('axe:' + rule, pid, '%s : %d élément(s), %s'
