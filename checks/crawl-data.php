@@ -59,6 +59,12 @@ $menu = [];
 $sectors = [];
 try {
     $session = Html::generateMenuSession(true);
+    // Menu affiché : Html::header() applique le crochet REDEFINE_MENUS des plugins après
+    // generateMenuSession() ; le fil attendu doit être lu sur le même menu (issue #50).
+    $session = Plugin::doHookFunction(\Glpi\Plugin\Hooks::REDEFINE_MENUS, $session);
+    if (!is_array($session)) {
+        $session = [];
+    }
 } catch (Throwable $e) {
     $session = [];
 }

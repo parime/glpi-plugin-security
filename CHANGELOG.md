@@ -16,6 +16,15 @@ Les versions antérieures à v1.11.0 sont décrites dans les
   journaux PHP et SQL et modes appliqués comme avant ; une tranche manquante fait échouer le
   verdict. Sans changement pour les plugins appelants. Auto-test : secbad et secgood en 2 tranches.
 
+### Corrigé
+- Parcours des pages, faux positifs venus du cœur de GLPI (issue #50), sans exception à déclarer
+  dans les plugins : liens masqués (`bs-invisible`, `visibility: hidden`) de l'en-tête de
+  navigation des fiches vers `id=-1` non suivis (`http-403`) ; fil d'Ariane attendu lu après le
+  crochet `REDEFINE_MENUS` (`ariane`) ; violations axe-core des composants du cœur reconnues par
+  règle et par balisage (flatpickr, select2, envoi de fichiers, `list_limit`, tableaux de bord,
+  fiche ITIL, palette par défaut et couleur principale `#fec95c`). Les défauts équivalents du
+  plugin restent signalés : cas `lookalike.php` ajouté à l'auto-test.
+
 ## v1.11.3
 
 ### Ajouté

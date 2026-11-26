@@ -322,7 +322,28 @@ Pages découvertes, sans liste à tenir : entrées `menu_toadd` et leurs sous-pa
 session), page de configuration (`config_page`), chaque fichier `front/*.php`, une fiche existante
 de chaque formulaire du plugin, les objets du cœur auxquels il ajoute un onglet (une fiche est
 créée au besoin), puis chaque lien vers le plugin trouvé en chemin. Les onglets du plugin sont
-demandés comme le fait GLPI. Anomalies, avec leur identifiant :
+demandés comme le fait GLPI.
+
+Éléments du cœur de GLPI qui ne comptent pas (issue #50), sans exception à déclarer dans le plugin :
+
+- liens masqués (`visibility: hidden`, classe `bs-invisible`), comme les liens premier, précédent,
+  suivant et dernier de l'en-tête de navigation des fiches vers `id=-1` quand aucune liste n'est en
+  session : ils ne sont pas suivis (les entrées des menus repliés, `display: none`, le restent) ;
+- fil d'Ariane attendu lu sur le menu affiché, après le crochet `REDEFINE_MENUS` des plugins ;
+- violations axe-core des composants du cœur, par règle et par balisage du cœur : sélecteur de date
+  flatpickr (`label`, `aria-allowed-attr`), listes select2 (`label`, `aria-input-field-name`), envoi
+  de fichiers `#fileupload…` (`label`), nombre de lignes des listes `list_limit` et sélecteur de
+  tableau de bord (`select-name`), barre d'outils des tableaux de bord et champs de la fiche ITIL
+  (`aria-prohibited-attr`, `list`, `button-name`, `aria-valid-attr-value`), palette par défaut
+  (`btn-success`, `btn-info`, `btn-warning`, statuts et avatars des fiches ITIL, libellés des
+  graphiques, couleur principale `#fec95c` du thème « auror » : `color-contrast`).
+
+Un champ, une liste, un bouton ou un lien du plugin de même défaut garde son propre balisage et
+reste signalé (auto-test : `tests/fixtures/secbad/front/lookalike.php`). Une sous-classe de
+`NotificationTarget` partage la table `glpi_notificationtargets` : le parcours en ouvre une fiche
+générique `notificationtarget….form.php?id=<n>`, qui doit donc s'afficher sans erreur.
+
+Anomalies, avec leur identifiant :
 
 | Identifiant | Anomalie |
 |---|---|
