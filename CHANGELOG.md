@@ -5,6 +5,8 @@ Les versions antérieures à v1.11.0 sont décrites dans les
 
 ## Non publié
 
+## v1.12.0
+
 ### Ajouté
 - Parcours des pages en tranches parallèles (#45) : nouvelle entrée facultative `pages-shards`
   (4 par défaut, de 1 à 16). Les jobs « Parcours des pages (glpi/glpi:X, tranche k) » démarrent
