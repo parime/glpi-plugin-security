@@ -510,6 +510,32 @@ jobs:
         run: |
           out=$(bash checks/check-pages.sh tests/fixtures/secgood secgood .glpi-security-exceptions) || { echo "$out"; exit 1; }
           echo "$out"
+      # Issue #45 : parcours en 2 tranches réunies par check-pages-merge.sh. Mêmes défauts signalés
+      # pour secbad, mêmes pages qu'en un seul parcours, exceptions de secgood appliquées à l'agrégat.
+      - name: tranches réunies, mêmes défauts et mêmes pages qu'en un seul parcours
+        run: |
+          whole=$(bash checks/check-pages.sh tests/fixtures/secbad secbad) || true
+          r=$RUNNER_TEMP/shards
+          for k in 1 2; do
+            CRAWL_SHARD=$k/2 CRAWL_WORK=$r/pages-$k bash checks/check-pages.sh tests/fixtures/secbad secbad || { echo "::error::la tranche $k/2 échoue"; exit 1; }
+          done
+          out=$(bash checks/check-pages-merge.sh tests/fixtures/secbad "$r" 2) && { echo "$out"; echo "::error::l'agrégat des tranches ne bloque plus secbad"; exit 1; }
+          echo "$out"
+          for id in "crawl http-500 front/crash.php" "crawl orphan front/hidden.php" "crawl ariane front/config.php"                     "crawl axe:image-alt front/hidden.php" "crawl php-errors" "crawl onglets-nombre front/tabs.php"                     "crawl onglet-refuse front/tabs.php" "crawl onglet-inactif front/tabs.php"; do
+            grep -q "^::error::$id" <<< "$out" || { echo "::error::défaut non signalé par l'agrégat : $id"; exit 1; }
+          done
+          a=$(grep '^RESULT crawl' <<< "$whole"); b=$(grep '^RESULT crawl' <<< "$out")
+          [ "$a" = "$b" ] || { echo "::error::un seul parcours « $a », tranches réunies « $b »"; exit 1; }
+          grep -q "parcourue(s) par aucune tranche" <<< "$out" && { echo "::error::page découverte mais parcourue par aucune tranche"; exit 1; }
+          rm -rf "$r/pages-2"
+          out=$(bash checks/check-pages-merge.sh tests/fixtures/secbad "$r" 2) && { echo "$out"; echo "::error::une tranche manquante doit faire échouer l'agrégat"; exit 1; }
+          grep -q "rapports des tranches incomplets" <<< "$out" || { echo "$out"; echo "::error::tranche manquante non signalée"; exit 1; }
+          rm -rf "$r"
+          for k in 1 2; do
+            CRAWL_SHARD=$k/2 CRAWL_WORK=$r/pages-$k bash checks/check-pages.sh tests/fixtures/secgood secgood || exit 1
+          done
+          out=$(bash checks/check-pages-merge.sh tests/fixtures/secgood "$r" 2 .glpi-security-exceptions) || { echo "$out"; echo "::error::secgood en tranches doit passer, exceptions comprises"; exit 1; }
+          echo "$out"
 
   heavy-changes:
     name: Contrôles lourds seulement si la PR les concerne (heavy-changes.sh)
@@ -593,6 +619,6 @@ jobs:
       - name: Vérifie la présence des jobs et des entrées
         run: |
           f=.github/workflows/plugin-security.yml; ko=0
-          for j in changes semgrep translations typography colors navigation archive workflows charter entrypoints secrets dependencies codeql-languages codeql dependency-review runtime translated-assertions integration-language upgrade pages; do grep -q "^  $j:$" "$f" || { echo "::error::job « $j » absent de $f"; ko=1; }; done
-          for i in heavy-paths navigation-mode tabs-mode pages-mode upgrade-test integration-languages translated-assertions-mode security-ref; do grep -q "^      $i:$" "$f" || { echo "::error::entrée « $i » absente de $f"; ko=1; }; done
+          for j in changes semgrep translations typography colors navigation archive workflows charter entrypoints secrets dependencies codeql-languages codeql dependency-review runtime translated-assertions integration-language upgrade pages-shard pages; do grep -q "^  $j:$" "$f" || { echo "::error::job « $j » absent de $f"; ko=1; }; done
+          for i in heavy-paths navigation-mode tabs-mode pages-mode pages-shards upgrade-test integration-languages translated-assertions-mode security-ref; do grep -q "^      $i:$" "$f" || { echo "::error::entrée « $i » absente de $f"; ko=1; }; done
           exit $ko

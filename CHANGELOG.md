@@ -3,6 +3,19 @@
 Les versions antérieures à v1.11.0 sont décrites dans les
 [publications GitHub](https://github.com/parime/glpi-plugin-security/releases) du dépôt.
 
+## Non publié
+
+### Ajouté
+- Parcours des pages en tranches parallèles (#45) : nouvelle entrée facultative `pages-shards`
+  (4 par défaut, de 1 à 16). Les jobs « Parcours des pages (glpi/glpi:X, tranche k) » démarrent
+  chacun leur GLPI, suivent toutes les pages pour en découvrir les liens et ne contrôlent dans le
+  navigateur que leur part (répartition stable par empreinte de l'adresse, jetons CSRF exclus) ;
+  un lien vu par le seul navigateur est parcouru par la tranche qui le trouve. Le job « Parcours de
+  toutes les pages (glpi/glpi:X) » garde son nom (contrôle exigé) et réunit les rapports
+  (`checks/check-pages-merge.sh`, `crawl-pages.py --merge`) : exceptions, écrans orphelins,
+  journaux PHP et SQL et modes appliqués comme avant ; une tranche manquante fait échouer le
+  verdict. Sans changement pour les plugins appelants. Auto-test : secbad et secgood en 2 tranches.
+
 ## v1.11.3
 
 ### Ajouté

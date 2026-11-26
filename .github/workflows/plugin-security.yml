@@ -113,6 +113,11 @@ on:
         required: false
         type: string
         default: '["glpi/glpi:11.0.11", "glpi/glpi:12.0.1"]'
+      pages-shards:
+        description: "Tranches parallèles du parcours des pages par image GLPI (issue #45) : chaque tranche démarre son GLPI et parcourt en profondeur sa part des pages (répartition stable par adresse) ; le job « Parcours de toutes les pages » réunit les rapports et rend le verdict. 1 pour un seul job par image"
+        required: false
+        type: number
+        default: 4
       pages-max-ms:
         description: Temps de réponse maximal du serveur par page, en millisecondes (0 pour ne pas mesurer)
         required: false
@@ -136,7 +141,22 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       heavy: ${{ steps.heavy.outputs.heavy }}
+      pages-shards: ${{ steps.shards.outputs.list }}
+      pages-shard-count: ${{ steps.shards.outputs.count }}
     steps:
+      # Tranches du parcours des pages (pages-shards, de 1 à 16) : liste JSON pour la matrice.
+      - name: Tranches du parcours des pages
+        id: shards
+        env:
+          SHARDS: ${{ inputs.pages-shards }}
+        run: |
+          n=${SHARDS%%.*}
+          case $n in ''|*[!0-9]*) n=4 ;; esac
+          [ "$n" -ge 1 ] || n=1
+          [ "$n" -le 16 ] || n=16
+          echo "count=$n" >> "$GITHUB_OUTPUT"
+          echo "list=[$(seq -s, 1 "$n")]" >> "$GITHUB_OUTPUT"
+          echo "Parcours des pages : $n tranche(s) par image"
       # Commit de fusion de la PR et son premier parent (la base à jour) : fetch-depth 2 suffit.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
         with:
@@ -555,11 +575,67 @@ jobs:
         if: failure()
         run: docker logs glpisec --tail 200
 
+  pages-shard:
+    # Issue #45 : le parcours, chemin critique de la CI, découpé en tranches parallèles par image.
+    # Chaque tranche démarre son GLPI, suit toutes les pages pour en découvrir les liens et ne
+    # parcourt en profondeur que les siennes ; son rapport est jugé par le job pages ci-dessous.
+    name: Parcours des pages (${{ matrix.glpi-image }}, tranche ${{ matrix.shard }})
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.heavy != 'false' && inputs.pages-test }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        glpi-image: ${{ fromJSON(inputs.pages-glpi-images) }}
+        shard: ${{ fromJSON(needs.changes.outputs.pages-shards) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+        with:
+          path: plugin
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7 (SHA pinned)
+        with:
+          repository: parime/glpi-plugin-security
+          ref: ${{ inputs.security-ref }}
+          path: security
+      - name: Nom du rapport de la tranche
+        id: artifact
+        env:
+          IMAGE: ${{ matrix.glpi-image }}
+          SHARD: ${{ matrix.shard }}
+        run: echo "name=pages-${IMAGE//[^A-Za-z0-9._-]/-}-$SHARD" >> "$GITHUB_OUTPUT"
+      - name: Démarre GLPI
+        env:
+          IMAGE: ${{ matrix.glpi-image }}
+        run: bash security/checks/start-glpi.sh "$IMAGE"
+      - name: Parcours de la tranche (pages de la tranche en profondeur, liens de toutes les pages)
+        env:
+          PLUGIN_KEY: ${{ inputs.plugin-key }}
+          SEED: ${{ inputs.seed-command }}
+          MODE: ${{ inputs.pages-mode }}
+          MAX_MS: ${{ inputs.pages-max-ms }}
+          ACCOUNTS: ${{ inputs.pages-accounts }}
+          TABS_MODE: ${{ inputs.tabs-mode }}
+          CRAWL_SHARD: ${{ matrix.shard }}/${{ needs.changes.outputs.pages-shard-count }}
+        run: CRAWL_WORK="$RUNNER_TEMP/pages" bash security/checks/check-pages.sh plugin "$PLUGIN_KEY" "" "$SEED" "$MODE" "$MAX_MS" "$ACCOUNTS" "$TABS_MODE"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2 (SHA pinned)
+        with:
+          name: ${{ steps.artifact.outputs.name }}
+          path: |
+            ${{ runner.temp }}/pages/report.json
+            ${{ runner.temp }}/pages/*.kept
+          retention-days: 3
+          overwrite: true
+          if-no-files-found: warn
+      - name: Journal GLPI (en cas d'échec)
+        if: failure()
+        run: docker logs glpisec --tail 200
+
   pages:
     # Issue #23 : chaque page du plugin ouverte dans un navigateur, par un administrateur et un
-    # compte non administrateur (voir README, « Parcours de toutes les pages »).
+    # compte non administrateur (voir README, « Parcours de toutes les pages »). Issue #45 : ce job
+    # garde le nom du contrôle exigé par la protection de branche et réunit les tranches.
     name: Parcours de toutes les pages (${{ matrix.glpi-image }})
-    needs: changes
+    needs: [changes, pages-shard]
     if: ${{ !cancelled() && needs.changes.outputs.heavy != 'false' && inputs.pages-test }}
     runs-on: ubuntu-latest
     strategy:
@@ -575,20 +651,21 @@ jobs:
           repository: parime/glpi-plugin-security
           ref: ${{ inputs.security-ref }}
           path: security
-      - name: Démarre GLPI
+      - name: Préfixe des rapports de l'image
+        id: artifact
         env:
           IMAGE: ${{ matrix.glpi-image }}
-        run: bash security/checks/start-glpi.sh "$IMAGE"
+        run: echo "prefix=pages-${IMAGE//[^A-Za-z0-9._-]/-}-" >> "$GITHUB_OUTPUT"
+      # Une tranche en échec n'a pas de rapport : le verdict le signale (rapports incomplets).
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2 (SHA pinned)
+        continue-on-error: true
+        with:
+          pattern: ${{ steps.artifact.outputs.prefix }}*
+          path: ${{ runner.temp }}/pages
       - name: Codes HTTP, erreurs PHP et JavaScript, fil d'Ariane, pages hors menu, accessibilité, temps de réponse
         env:
-          PLUGIN_KEY: ${{ inputs.plugin-key }}
           EXCEPTIONS: ${{ inputs.exceptions-file }}
-          SEED: ${{ inputs.seed-command }}
           MODE: ${{ inputs.pages-mode }}
-          MAX_MS: ${{ inputs.pages-max-ms }}
-          ACCOUNTS: ${{ inputs.pages-accounts }}
           TABS_MODE: ${{ inputs.tabs-mode }}
-        run: bash security/checks/check-pages.sh plugin "$PLUGIN_KEY" "$EXCEPTIONS" "$SEED" "$MODE" "$MAX_MS" "$ACCOUNTS" "$TABS_MODE"
-      - name: Journal GLPI (en cas d'échec)
-        if: failure()
-        run: docker logs glpisec --tail 200
+          COUNT: ${{ needs.changes.outputs.pages-shard-count }}
+        run: bash security/checks/check-pages-merge.sh plugin "$RUNNER_TEMP/pages" "$COUNT" "$EXCEPTIONS" "$MODE" "$TABS_MODE"
