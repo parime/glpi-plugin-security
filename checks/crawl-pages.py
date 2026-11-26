@@ -151,7 +151,9 @@ TAB_FOCUS_JS = '''(index) => { %s
 
 
 # Liens du HTML reçu (tranches) : balises <a href>, comme le sélecteur a[href] du navigateur.
-RAW_LINK = re.compile(r'<a\b[^>]*?\shref\s*=\s*(["\'])(.*?)\1', re.I | re.S)
+RAW_LINK = re.compile(r'<a\b([^>]*?)\shref\s*=\s*(["\'])(.*?)\2([^>]*)>', re.I | re.S)
+# Lien masqué du HTML reçu (classe bs-invisible, visibility: hidden), écarté comme dans links() (issue #50).
+RAW_HIDDEN = re.compile(r'class\s*=\s*["\'][^"\']*\bbs-invisible\b|visibility\s*:\s*hidden', re.I)
 # Paramètres propres à chaque instance de GLPI (jetons) : ignorés pour répartir les pages.
 VOLATILE = re.compile(r'csrf|token', re.I)
 
@@ -246,7 +248,9 @@ class Crawler:
     def raw_links(self, body, url):
         """Liens vers le plugin du HTML reçu du serveur (même filtre que links())."""
         out = []
-        for _, href in RAW_LINK.findall(body or ''):
+        for before, _, href, after in RAW_LINK.findall(body or ''):
+            if RAW_HIDDEN.search(before + ' ' + after):
+                continue
             href = html.unescape(href).strip()
             if href and not href.startswith(('#', 'javascript:', 'mailto:')):
                 rel = self.rel(urljoin(url, href))
