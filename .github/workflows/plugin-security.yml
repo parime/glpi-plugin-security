@@ -47,7 +47,7 @@ on:
         required: false
         type: string
         # À passer à la nouvelle étiquette dans le commit étiqueté (contrôlé par self-test.yml).
-        default: v1.11.3
+        default: v1.12.1
       charter-mode:
         description: "Charte commune : error (bloquant, par défaut depuis v1.9.0) ou warning (avertissements)"
         required: false

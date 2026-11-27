@@ -5,6 +5,11 @@ Les versions antérieures à v1.11.0 sont décrites dans les
 
 ## Non publié
 
+## v1.12.1
+
+### Corrigé
+- `security-ref` par défaut : la v1.12.0 gardait `v1.11.3`, si bien que les plugins appelant `@v1.12.0` exécutaient les scripts de v1.11.3 (parcours en tranches sans `check-pages-merge.sh`, code 127 ; filtrage du cœur de #50 absent). Passé à `v1.12.1`.
+
 ## v1.12.0
 
 ### Ajouté
