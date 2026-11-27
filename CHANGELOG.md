@@ -5,6 +5,16 @@ Les versions antérieures à v1.11.0 sont décrites dans les
 
 ## Non publié
 
+## v1.12.2
+
+### Corrigé
+- Parcours des pages, éléments du cœur de GLPI reconnus dans la page (#50, PR #54) : l'élément
+  signalé par axe est retrouvé et rattaché à son composant du cœur (flatpickr, select2, TinyMCE,
+  tableaux de bord, pied de la fiche ITIL, list_limit) ; contraste ignoré pour les couleurs de la
+  palette du thème et les classes standard de Tabler, une couleur propre au plugin restant
+  signalée. Vérifié sur le parcours réel de GRC : de 453 à 19 (GLPI 12) et 44 (GLPI 11)
+  anomalies, surtout des contrastes propres au plugin.
+
 ## v1.12.1
 
 ### Corrigé
