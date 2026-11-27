@@ -98,11 +98,55 @@ AXE_CORE_RULES = {
     # Palette par défaut de Tabler et GLPI : boutons standard, statuts et avatars des fiches ITIL,
     # libellés des graphiques des tableaux de bord.
     'color-contrast': re.compile(r'\.btn-(success|info|warning)\b|\.status\.rounded-1|\.avatar\b'
-                                 r'|^#chart-# > \.main-label$'),
+                                 r'|^#chart[-_]# > \.main-label$'),
 }
 # Couleur principale de la palette par défaut « auror » : liens et boutons de la couleur du thème,
 # quel que soit leur balisage (contraste lu par axe-core). Une couleur choisie par le plugin reste signalée.
 AXE_CORE_COLORS = ['#fec95c']
+# Composants du cœur reconnus dans la page elle-même (issue #50, cibles réelles du parcours de GRC) :
+# axe-core ne donne souvent que « .input » ou « input[aria-label="…"] », sans le conteneur. L'élément
+# signalé est du cœur s'il se trouve dans un de ces composants (Element.closest), règle par règle.
+CORE_WIDGETS = '.flatpickr, .flatpickr-input, .flatpickr-calendar, .select2-container, .tox'
+AXE_CORE_DOM = {
+    'label': CORE_WIDGETS,
+    'aria-allowed-attr': CORE_WIDGETS,
+    'aria-input-field-name': '.select2-container',
+    'select-name': 'select[name="glpilist_limit"], .dashboard',
+    # Barre d'outils des tableaux de bord, éditeur TinyMCE, pied et champs de la fiche ITIL.
+    'aria-prohibited-attr': '.dashboard, .tox, #itil-object-container .form-buttons, .itilstatus',
+    'list': '.dashboard',
+    'button-name': '#itil-object-container .form-buttons, .dashboard',
+}
+# Contrastes de la palette du thème (variables de Tabler lues dans la page) : texte ou fond d'une de
+# ces couleurs, ou classe standard de Tabler de ces couleurs. Une couleur propre au plugin (style,
+# classe du plugin) reste signalée.
+PALETTE = ['primary', 'success', 'info', 'warning', 'danger', 'azure', 'green', 'link-color']
+PALETTE_CLASS = (r'^(btn|btn-ghost|btn-outline|text|bg|badge|link|alert|status)-(primary|success|info|warning|danger'
+                 r'|azure|green|dark-subtle|dark-emphasis)(-lt|-emphasis|-subtle)?$|^(status|avatar|badge)$')
+AXE_JS = r'''async (o) => {
+  const c = document.querySelector("main#page") || document;
+  const r = await axe.run(c, o.options);
+  const hex = (v) => { const e = document.createElement("i"); e.style.color = String(v || "").trim();
+    if (!e.style.color) return ""; document.body.appendChild(e); const m = getComputedStyle(e).color.match(/\d+/g);
+    e.remove(); return m ? "#" + m.slice(0, 3).map(x => (+x).toString(16).padStart(2, "0")).join("") : ""; };
+  const root = getComputedStyle(document.documentElement);
+  const colors = new Set(o.colors.concat(o.palette.map(n => hex(root.getPropertyValue("--tblr-" + n)))).filter(Boolean));
+  const cls = new RegExp(o.paletteClass);
+  const el = (n) => { try { return n.target.length === 1 ? document.querySelector(n.target[0]) : null; } catch (e) { return null; } };
+  const core = (v, n) => {
+    const e = el(n);
+    if (e && o.dom[v.id] && e.closest(o.dom[v.id])) return true;
+    if (v.id !== "color-contrast") return false;
+    const data = (n.any || []).map(a => a.data).filter(Boolean);
+    if (data.some(d => [d.fgColor, d.bgColor].some(x => colors.has(hex(x))))) return true;
+    for (let p = e, i = 0; p && i < 3; p = p.parentElement, i++) {
+      if ([...p.classList].some(k => cls.test(k))) return true;
+    }
+    return false;
+  };
+  return r.violations.filter(v => ["critical", "serious"].includes(v.impact))
+    .map(v => [v.id, v.nodes.filter(n => !core(v, n)).map(n => n.target.join(" ")), v.help]);
+}'''
 
 
 def core_violation(rule, target):
@@ -303,14 +347,8 @@ class Crawler:
         try:
             if not pg.evaluate('typeof axe !== "undefined"'):
                 pg.add_script_tag(content=self.axe)
-            res = pg.evaluate('async (o) => { const c = document.querySelector("main#page") || document;'
-                              ' const r = await axe.run(c, o.options); return r.violations.filter(v =>'
-                              ' ["critical", "serious"].includes(v.impact)).map(v => [v.id, v.nodes'
-                              # Contraste dû à la couleur principale du thème par défaut (issue #50).
-                              '.filter(n => !(v.id === "color-contrast" && (n.any || []).some(a => a.data'
-                              ' && [a.data.fgColor, a.data.bgColor].some(x => o.colors.includes(String(x).toLowerCase())))))'
-                              '.map(n => n.target.join(" ")), v.help]); }',
-                              {'options': AXE_OPTIONS, 'colors': AXE_CORE_COLORS})
+            res = pg.evaluate(AXE_JS, {'options': AXE_OPTIONS, 'colors': AXE_CORE_COLORS, 'palette': PALETTE,
+                                       'paletteClass': PALETTE_CLASS, 'dom': AXE_CORE_DOM})
         except Exception as exc:
             print('axe-core : %s' % str(exc).splitlines()[0][:160])
             return set()
