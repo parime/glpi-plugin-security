@@ -127,6 +127,12 @@ jobs:
             echo "::error::le contrôle des traductions ne détecte plus les injections de secbad"
             exit 1
           fi
+      - name: un fragment fautif de locales/unreleased doit échouer
+        run: |
+          if php checks/check-translations.php tests/fixtures/secbad-fragment/locales; then
+            echo "::error::le contrôle des traductions ne lit plus les fragments locales/unreleased"
+            exit 1
+          fi
       - name: secgood doit passer
         run: php checks/check-translations.php tests/fixtures/secgood/locales
 

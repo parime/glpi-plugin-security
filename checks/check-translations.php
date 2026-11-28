@@ -8,6 +8,8 @@
  * HTML, d'URL, de JavaScript, d'entité HTML ou de balise de notification GLPI (##…##) qui ne
  * figure pas déjà dans le msgid.
  *
+ * Les fragments de traduction <dossier locales>/unreleased/*.po sont contrôlés comme les catalogues.
+ *
  * Usage : php check-translations.php <dossier locales>   (code de sortie 1 si un écart est trouvé)
  */
 
@@ -75,7 +77,13 @@ const PATTERNS = [
 ];
 
 $issues = 0;
-$files = glob(rtrim($dir, '/') . '/*.po') ?: [];
+// Fragments de traduction (locales/unreleased/*.po, une PR par fichier) contrôlés aussi : sans cela,
+// une traduction fautive passe la CI de sa PR et ne bloque qu'à la publication, une fois le fragment
+// intégré au catalogue (cas réel : « ATT&CK; » lu comme l'entité &CK;, GRC 2.88.0).
+$files = array_merge(
+    glob(rtrim($dir, '/') . '/*.po') ?: [],
+    glob(rtrim($dir, '/') . '/unreleased/*.po') ?: []
+);
 foreach ($files as $file) {
     foreach (readPo($file) as $entry) {
         $source = $entry['id'] . "\n" . $entry['plural'];
