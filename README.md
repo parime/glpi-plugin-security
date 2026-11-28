@@ -45,6 +45,19 @@ plugin créé depuis [glpi-plugin-template](https://github.com/parime/glpi-plugi
 L'**audit hebdomadaire** de ce dépôt ouvre une issue pour tout dépôt de plugin qui ne l'appelle pas,
 ou qui l'appelle dans une version antérieure à la dernière étiquette (branche par défaut).
 
+Enfin, protéger les branches `main` et `dev` (si le dépôt en a une) contre la suppression et le
+force push, avec les droits d'administration du dépôt :
+
+```sh
+scripts/protect-branches.sh parime/<dépôt>
+```
+
+Sans protection, un dépôt qui supprime les branches fusionnées perd `main` à la fusion d'une PR
+`main` vers `dev`, et ne peut plus publier (cas réel : glpi-finops). Une protection déjà en place
+est conservée, seuls la suppression et le force push sont interdits. L'audit hebdomadaire signale
+aussi tout dépôt de plugin dont `main` est absente ou non protégée, ou dont `dev` existe sans
+protection.
+
 ## Ce qui est vérifié
 
 ### Règles Semgrep (`semgrep/glpi-plugin-security.yml`)

@@ -2,6 +2,8 @@
 # Liste les dépôts de plugins GLPI de <propriétaire> qui n'appellent pas le workflow commun, ou qui
 # l'appellent dans une version antérieure à la dernière étiquette publiée de ce dépôt, et tient à
 # jour une issue de <dépôt d'issues> (ouverte s'il en manque ou s'il y en a en retard, fermée sinon).
+# Signale aussi les dépôts dont la branche main est absente ou non protégée, ou dont la branche dev
+# existe sans protection (scripts/protect-branches.sh corrige).
 # Usage : audit-repositories.sh <propriétaire> <dépôt d'issues>   (GH_TOKEN dans l'environnement)
 set -euo pipefail
 OWNER=$1 ISSUES_REPO=$2
@@ -13,11 +15,22 @@ LATEST=$(gh api "repos/parime/glpi-plugin-security/tags" --jq '[.[].name | selec
 
 missing=()
 outdated=()
+unprotected=()
 plugins=0
 while IFS=$'\t' read -r repo branch; do
   setup=$(gh api "repos/$OWNER/$repo/contents/setup.php?ref=$branch" --jq .content 2>/dev/null | base64 -d 2>/dev/null || true)
   grep -q 'function plugin_version_' <<< "$setup" || continue
   plugins=$((plugins + 1))
+  # main obligatoire et protégée (jamais supprimée par GitHub, même avec delete_branch_on_merge) ;
+  # dev, quand elle existe, protégée aussi. Le champ protected est lisible avec le jeton par défaut.
+  for b in main dev; do
+    prot=$(gh api "repos/$OWNER/$repo/branches/$b" --jq .protected 2>/dev/null || echo absente)
+    if [ "$prot" = absente ] && [ "$b" = main ]; then
+      echo "$repo : branche main absente"; unprotected+=("$repo|main absente")
+    elif [ "$prot" = false ]; then
+      echo "$repo : branche $b non protégée"; unprotected+=("$repo|$b non protégée")
+    fi
+  done
   version=""
   for wf in $(gh api "repos/$OWNER/$repo/contents/.github/workflows?ref=$branch" --jq '.[].path' 2>/dev/null || true); do
     content=$(gh api "repos/$OWNER/$repo/contents/$wf?ref=$branch" --jq .content | base64 -d)
@@ -38,11 +51,11 @@ while IFS=$'\t' read -r repo branch; do
 done < <(gh api "users/$OWNER/repos?per_page=100" --paginate \
   --jq '.[] | select(.archived | not) | select(.fork | not) | [.name, .default_branch] | @tsv')
 
-echo "$plugins dépôt(s) de plugin, ${#missing[@]} sans le contrôle commun, ${#outdated[@]} en retard sur $LATEST."
+echo "$plugins dépôt(s) de plugin, ${#missing[@]} sans le contrôle commun, ${#outdated[@]} en retard sur $LATEST, ${#unprotected[@]} branche(s) main ou dev absente ou non protégée."
 if [ "${DRY_RUN:-0}" = 1 ]; then exit 0; fi
 issue=$(gh issue list -R "$ISSUES_REPO" --state open --search "\"$TITLE\" in:title" --json number --jq '.[0].number // empty')
-if [ ${#missing[@]} -eq 0 ] && [ ${#outdated[@]} -eq 0 ]; then
-  [ -z "$issue" ] || gh issue close "$issue" -R "$ISSUES_REPO" --comment "Tous les dépôts de plugins appellent le contrôle commun, en $LATEST."
+if [ ${#missing[@]} -eq 0 ] && [ ${#outdated[@]} -eq 0 ] && [ ${#unprotected[@]} -eq 0 ]; then
+  [ -z "$issue" ] || gh issue close "$issue" -R "$ISSUES_REPO" --comment "Tous les dépôts de plugins appellent le contrôle commun, en $LATEST, et leurs branches main et dev sont protégées."
   exit 0
 fi
 body=""
@@ -54,6 +67,11 @@ fi
 if [ ${#outdated[@]} -gt 0 ]; then
   body+="Ces dépôts appellent une version antérieure à **$LATEST** sur leur branche par défaut : ils ne reçoivent pas les derniers contrôles."$'\n\n'
   for entry in "${outdated[@]}"; do body+="- [ ] [$OWNER/${entry%%|*}](https://github.com/$OWNER/${entry%%|*}) : ${entry#*|}"$'\n'; done
+  body+=$'\n'
+fi
+if [ ${#unprotected[@]} -gt 0 ]; then
+  body+="Branches à protéger : sans protection, la fusion d'une PR main vers dev supprime main quand le dépôt supprime les branches fusionnées. Correction : \`scripts/protect-branches.sh <propriétaire/dépôt>\` de ce dépôt (main absente : la recréer d'abord depuis la dernière étiquette)."$'\n\n'
+  for entry in "${unprotected[@]}"; do body+="- [ ] [$OWNER/${entry%%|*}](https://github.com/$OWNER/${entry%%|*}) : ${entry#*|}"$'\n'; done
 fi
 if [ -n "$issue" ]; then
   gh issue edit "$issue" -R "$ISSUES_REPO" --body "$body"
