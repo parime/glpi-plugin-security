@@ -13,6 +13,11 @@ Les versions antérieures à v1.11.0 sont décrites dans les
   supprimé `main` de glpi-finops (suppression automatique des branches fusionnées), bloquant toute
   publication.
 
+### Corrigé
+- Traductions sans contenu actif : les fragments `locales/unreleased/*.po` sont contrôlés comme les
+  catalogues. Une traduction fautive passait la CI de sa PR et ne bloquait qu'à la publication, une
+  fois intégrée au catalogue (cas réel : « ATT&CK; » lu comme l'entité `&CK;`, GRC 2.88.0).
+
 ## v1.12.2
 
 ### Corrigé
