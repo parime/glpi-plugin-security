@@ -5,6 +5,14 @@ Les versions antérieures à v1.11.0 sont décrites dans les
 
 ## Non publié
 
+### Ajouté
+- Branches `main` et `dev` protégées contre la suppression : `scripts/protect-branches.sh` applique
+  la protection (une protection existante est conservée, seuls la suppression et le force push sont
+  interdits), et l'audit hebdomadaire signale tout dépôt de plugin dont `main` est absente ou non
+  protégée, ou dont `dev` existe sans protection. Cas réel : la fusion d'une PR `main` vers `dev` a
+  supprimé `main` de glpi-finops (suppression automatique des branches fusionnées), bloquant toute
+  publication.
+
 ## v1.12.2
 
 ### Corrigé
